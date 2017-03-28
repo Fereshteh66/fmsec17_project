@@ -25,57 +25,58 @@ rule Register_pk:
 rule Reveal_ltk:
   [ !Ltk(A, ltkA) ] --[ Reveal(A) ]-> [ Out(ltkA) ]
 
+
+rule setup:
+  [ Fr(~kAB) ]
+--[]->
+  [ St_A_0($A, ~kAB), St_B_0($B, ~kAB) ]
+
+
 // Initialize A
 rule Init_A:
-  [ Fr(~id)
-  , !Ltk(A, ltkA)
-  ]
---[ Create_A(A, ~id) ]->
-  [ St_A_1(A, ~id, B) ]
+  [ St_A_0($A, ~kAB), Fr(~id) ]
+--[ Create_A($A, ~id) ]->
+  [ St_A_1($A, ~id, ~kAB, $B) ]
 
 // Initialize B
 rule Init_B:
-  [ Fr(~id)
-  , !Ltk(B, ltkB)
-  ]
---[ Create_B(B, ~id) ]->
-  [ St_B_1(B, ~id, A) ]
+  [ St_B_0($B, ~kAB), Fr(~id) ]
+--[ Create_B($B, ~id) ]->
+  [ St_B_1($B, ~id, ~kAB, $A) ]
 
 // 1. A send
 rule A_1_send:
-  [ St_A_1(A, ~id, B) 
-  , Fr(~x)
-  ]
---[ Send('1', A, ~x) ]->
-  [ St_A_2(A, ~id, ~x, B), Out(~x) ]
+  [ St_A_1($A, ~id, ~kAB, $B), Fr(~x) ]
+--[ Send('1', $A, ~x) ]->
+  [ St_A_2($A, ~id, ~kAB, ~x, $B), Out(~x) ]
 
 // 1. B receive
 rule B_1_receive:
-  [ St_B_1(B, ~id, A)
-  , In(x)
-  ]
---[ Recv('1', B, x) ]->
-  [ St_B_2(B, ~id, x, A) ]
+  [ St_B_1($B, ~id, ~kAB, $A), In(x) ]
+--[ Recv('1', $B, x) ]->
+  [ St_B_2($B, ~id, ~kAB, x, $A) ]
 
 
 // 2. B send
 rule B_2_send:
-  [ St_B_2(B, ~id, x, A) ]
---[ Send('2', b, mac) ]->
-  [ St_B_3(B, ~id, x, A), Out(senc(x, mac)) ]
+  [ St_B_2($B, ~id, ~kAB, x, $A) ]
+--[ Send('2', $B, mac) ]->
+  [ St_B_3($B, ~id, ~kAB, x, $A), Out(senc(x, ~kAB)) ]
 
 // 2. A receive
 rule A_2_receive:
-  [ St_A_2(A, ~id, x, B)
-  , In(senc(x, mac))
-  ]
---[ Recv('2', A, mac) ]->
-  [ St_A_3(A, ~id, x, B) ]
+  [ St_A_2($A, ~id, ~kAB, x, $B), In(senc(x, ~kAB)) ]
+--[ Recv('2', $A, mac) ]->
+  [ St_A_3($A, ~id, ~kAB, x, $B) ]
 
 
 /**
 	Lemmas
 **/
+
+lemma executable:
+  exists-trace
+  "∃ #i. (Finish( ) @ #i) ∧ (¬(∃ A #j. Reveal( A ) @ #j))"
 	
 lemma secrecy:
   "All A x #i. 
