@@ -59,7 +59,7 @@ rule B_2_send:
 
 // 2. A receive
 rule A_2_receive:
-  let macA2 = mac(kAB, <x, B, A>)
+  let macA2 = mac(kAB, <x, A, B>)
   in
   [ St_A_2(A, ~id, kAB, x, B), In(<'2', macA2>) ]
 --[ Recv($A, <'2', macA2>), Finish() ]->
