@@ -1,0 +1,80 @@
+theroy P2
+begin
+
+
+builtins: symmetric-encryption
+functions: mac/2
+
+/*
+	We want to formalize the following protocol
+	protocol {
+		1. A -> B: {'1', x}
+		2. B -> A: {'2', y}
+		3. A -> B: {'3', y}k(B,A)
+		4. B -> A: {'4', x}k(A,B)
+	}
+*/
+
+// Setup a shared key with two parties
+rule SetupKey:
+  [ Fr(~kAB) ]
+--[ NotEq($A, $B) ]->
+  [ !SharedKey($A, $B, ~kAB) ]
+
+
+rule Reveal:
+  [ !SharedKey(A, B, kAB)]
+--[ Reveal(A), Reveal(B) ]->
+  [ Out(kAB) ]
+
+
+// Initialize A
+rule Init_A:
+  [ Fr(~id), !SharedKey(I, R, kBA), !SharedKey(R, I, kAB) ]
+--[ Create_A(I, ~id) ]->
+  [ St_A_1(I, ~id, kBA, kAB, R) ]
+
+// Initialize B
+rule Init_B:
+  [ Fr(~id), !SharedKey(I, R, kBA), !SharedKey(R, I, kAB) ]
+--[ Create_B(R, ~id) ]->
+  [ St_B_1(R, ~id, kBA, kAB, I) ]
+
+// 1. A send
+rule A_1_send:
+  [ St_A_1(I, ~id, kBA, kAB, R), Fr(~x) ]
+--[ Send(I, <'1', ~x>) ]->
+  [ St_A_2(I, ~id, kBA, kAB, ~x, R), Out(<'1', ~x>) ]
+
+
+// 1. B receive
+rule B_1_receive:
+  [ St_B_1(R, ~id, kBA, kAB, I), In(<'1', x>) ]
+--[ Recv(R, <'1', x>) ]->
+  [ St_B_2(R, ~id, kBA, kAB, x, I) ]
+
+
+// 2. B send
+rule B_2_send:
+  [ St_B_2(R, ~id, kBA, kAB, x, I), Fr(~y) ]
+--[ Send(R, <'2', ~y>) ]->
+  [ St_B_2(R, ~id, kBA, kAB, x, y, I), Out(<'2', ~y>) ]
+
+// 2. A receive
+rule A_2_receive:
+  [ St_A_2(I, ~id, kBA, kAB, x, R), In(<'2', y>) ]
+--[ Recv(I, <'2', y>) ]->
+  [ St_A_3(I, ~id, kBA, kAB, x, y, R) ]
+
+// 3. A send
+rule A_3_send:
+  let macA3 = mac(kBA, <y, I, R>)
+  in
+  [ St_A_3(I, ~id, kBA, kAB, x, y, R) ]
+--[ Send(I, <'3', macA3) ]->
+  [ St_A_3(I, ~id, kBA, kAB, x, y, R), Out(<'3', macA3>) ]
+
+// TODO: continue with the other steps
+
+
+end
