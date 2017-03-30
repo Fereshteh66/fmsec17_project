@@ -1,4 +1,4 @@
-theroy P2
+theory P2
 begin
 
 
@@ -10,16 +10,16 @@ functions: mac/2
 	protocol {
 		1. A -> B: {'1', x}
 		2. B -> A: {'2', y}
-		3. A -> B: {'3', y}k(B,A)
+		3. A -> B: {'3', y}k(A,B)
 		4. B -> A: {'4', x}k(A,B)
 	}
 */
 
 // Setup a shared key with two parties
 rule SetupKey:
-  [ Fr(~kAB) ]
+  [ Fr(~shk) ]
 --[ NotEq($A, $B) ]->
-  [ !SharedKey($A, $B, ~kAB) ]
+  [ !SharedKey($A, $B, ~shk) ]
 
 
 rule Reveal:
@@ -30,51 +30,123 @@ rule Reveal:
 
 // Initialize A
 rule Init_A:
-  [ Fr(~id), !SharedKey(I, R, kBA), !SharedKey(R, I, kAB) ]
+  [ Fr(~id), !SharedKey(I, R, kAB) ]
 --[ Create_A(I, ~id) ]->
-  [ St_A_1(I, ~id, kBA, kAB, R) ]
+  [ St_A_1(I, ~id, kAB, R) ]
 
 // Initialize B
 rule Init_B:
-  [ Fr(~id), !SharedKey(I, R, kBA), !SharedKey(R, I, kAB) ]
+  [ Fr(~id), !SharedKey(I, R, kAB) ]
 --[ Create_B(R, ~id) ]->
-  [ St_B_1(R, ~id, kBA, kAB, I) ]
+  [ St_B_1(R, ~id, kAB, I) ]
 
 // 1. A send
 rule A_1_send:
-  [ St_A_1(I, ~id, kBA, kAB, R), Fr(~x) ]
+  [ St_A_1(I, ~id, kAB, R), Fr(~x) ]
 --[ Send(I, <'1', ~x>) ]->
-  [ St_A_2(I, ~id, kBA, kAB, ~x, R), Out(<'1', ~x>) ]
+  [ St_A_2(I, ~id, kAB, ~x, R), Out(<'1', ~x>) ]
 
 
 // 1. B receive
 rule B_1_receive:
-  [ St_B_1(R, ~id, kBA, kAB, I), In(<'1', x>) ]
+  [ St_B_1(R, ~id, kAB, I), In(<'1', x>) ]
 --[ Recv(R, <'1', x>) ]->
-  [ St_B_2(R, ~id, kBA, kAB, x, I) ]
+  [ St_B_2(R, ~id, kAB, x, I) ]
 
 
 // 2. B send
 rule B_2_send:
-  [ St_B_2(R, ~id, kBA, kAB, x, I), Fr(~y) ]
---[ Send(R, <'2', ~y>) ]->
-  [ St_B_2(R, ~id, kBA, kAB, x, y, I), Out(<'2', ~y>) ]
+  [ St_B_2(R, ~id, kAB, x, I), Fr(~y) ]
+--[ Send(R, <'2', ~y>), Running(R, I, <'I', R, <x, ~y>>) ]->
+  [ St_B_3(R, ~id, kAB, x, ~y, I), Out(<'2', ~y>) ]
 
 // 2. A receive
 rule A_2_receive:
-  [ St_A_2(I, ~id, kBA, kAB, x, R), In(<'2', y>) ]
---[ Recv(I, <'2', y>) ]->
-  [ St_A_3(I, ~id, kBA, kAB, x, y, R) ]
+  [ St_A_2(I, ~id, kAB, x, R), In(<'2', y>) ]
+--[ Recv(I, <'2', y>), Running(I, R, <'R', 'I', <x, y>>) ]->
+  [ St_A_3(I, ~id, kAB, x, y, R) ]
 
 // 3. A send
 rule A_3_send:
-  let macA3 = mac(kBA, <y, I, R>)
+  let macA3 = mac(kAB, <y, I, R>)
   in
-  [ St_A_3(I, ~id, kBA, kAB, x, y, R) ]
---[ Send(I, <'3', macA3) ]->
-  [ St_A_3(I, ~id, kBA, kAB, x, y, R), Out(<'3', macA3>) ]
+  [ St_A_3(I, ~id, kAB, x, y, R) ]
+--[ Send(I, <'3', macA3>) ]->
+  [ St_A_4(I, ~id, kAB, x, y, R), Out(<'3', macA3>) ]
 
-// TODO: continue with the other steps
 
+// 3. B receive
+rule B_3_receive:
+  let macB3 = mac(kAB, <y, I, R>)
+  in
+  [ St_B_3(R, ~id, kAB, x, y, I), In(<'3', macB3>) ]
+--[ Recv(R, <'3', macB3>), Commit(R, I, <'R', 'I', <x, y>>) ]->
+  [ St_B_4(R, ~id, kAB, x, y, I) ]
+
+
+// 4. B send
+rule B_4_send:
+  let macB4 = mac(kAB, <x, I, R>)
+  in
+  [ St_B_4(R, ~id, kAB, x, y, I) ]
+--[ Send(R, <'4', macB4>) ]->
+  [ St_B_5(R, ~id, kAB, x, y, I), Out(<'4', macB4>) ]
+
+
+// 4. A receive
+rule A_4_receive:
+  let macA4 = mac(kAB, <x, I, R>)
+  in
+  [ St_A_4(I, ~id, kAB, x, y, I), In(<'4', macA4>) ]
+--[ Recv(I, <'4', macA4>), Commit(I, R, <'I', 'R', <x, y>>), Honest(I), Honest(R), Finish() ]->
+  [ St_A_5(I, ~id, kAB, x, y, I) ]
+
+
+/**
+	Lemmas
+**/
+
+lemma executable:
+  exists-trace
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+/**
+	Restrictions
+**/
+restriction noselfcommunication:
+  " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
 
 end

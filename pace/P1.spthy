@@ -92,4 +92,10 @@ lemma injectiveagreementINITIATOR:
               | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 
+/**
+	Restrictions
+**/
+restriction noselfcommunication:
+  " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
+
 end
