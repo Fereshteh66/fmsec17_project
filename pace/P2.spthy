@@ -3,14 +3,13 @@ begin
 
 
 builtins: symmetric-encryption
-functions: mac/2
 
 /*
 	We want to formalize the following protocol
 	protocol {
 		1. A -> B: {'1', x}
 		2. B -> A: {'2', y}
-		3. A -> B: {'3', y}k(A,B)
+		3. A -> B: {'3', y}k(B,A)
 		4. B -> A: {'4', x}k(A,B)
 	}
 */
@@ -30,76 +29,76 @@ rule Reveal:
 
 // Initialize A
 rule Init_A:
-  [ Fr(~id), !SharedKey(I, R, kAB) ]
+  [ Fr(~id), !SharedKey(I, R, kAB), !SharedKey(R, I, kBA)]
 --[ Create_A(I, ~id) ]->
-  [ St_A_1(I, ~id, kAB, R) ]
+  [ St_A_1(I, ~id, kAB, kBA, R) ]
 
 // Initialize B
 rule Init_B:
-  [ Fr(~id), !SharedKey(I, R, kAB) ]
+  [ Fr(~id), !SharedKey(I, R, kAB), !SharedKey(R, I, kBA) ]
 --[ Create_B(R, ~id) ]->
-  [ St_B_1(R, ~id, kAB, I) ]
+  [ St_B_1(R, ~id, kAB, kBA, I) ]
 
 // 1. A send
 rule A_1_send:
-  [ St_A_1(I, ~id, kAB, R), Fr(~x) ]
+  [ St_A_1(I, ~id, kAB, kBA, R), Fr(~x) ]
 --[ Send(I, <'1', ~x>) ]->
-  [ St_A_2(I, ~id, kAB, ~x, R), Out(<'1', ~x>) ]
+  [ St_A_2(I, ~id, kAB, kBA, ~x, R), Out(<'1', ~x>) ]
 
 
 // 1. B receive
 rule B_1_receive:
-  [ St_B_1(R, ~id, kAB, I), In(<'1', x>) ]
+  [ St_B_1(R, ~id, kAB, kBA, I), In(<'1', x>) ]
 --[ Recv(R, <'1', x>) ]->
-  [ St_B_2(R, ~id, kAB, x, I) ]
+  [ St_B_2(R, ~id, kAB, kBA, x, I) ]
 
 
 // 2. B send
 rule B_2_send:
-  [ St_B_2(R, ~id, kAB, x, I), Fr(~y) ]
+  [ St_B_2(R, ~id, kAB, kBA, x, I), Fr(~y) ]
 --[ Send(R, <'2', ~y>), Running(R, I, <'I', R, <x, ~y>>) ]->
-  [ St_B_3(R, ~id, kAB, x, ~y, I), Out(<'2', ~y>) ]
+  [ St_B_3(R, ~id, kAB, kBA, x, ~y, I), Out(<'2', ~y>) ]
 
 // 2. A receive
 rule A_2_receive:
-  [ St_A_2(I, ~id, kAB, x, R), In(<'2', y>) ]
+  [ St_A_2(I, ~id, kAB, kBA, x, R), In(<'2', y>) ]
 --[ Recv(I, <'2', y>), Running(I, R, <'R', 'I', <x, y>>) ]->
-  [ St_A_3(I, ~id, kAB, x, y, R) ]
+  [ St_A_3(I, ~id, kAB, kBA, x, y, R) ]
 
 // 3. A send
 rule A_3_send:
-  let macA3 = mac(kAB, <y, I, R>)
+  let macA3 = senc(y, kBA)
   in
-  [ St_A_3(I, ~id, kAB, x, y, R) ]
+  [ St_A_3(I, ~id, kAB, kBA, x, y, R) ]
 --[ Send(I, <'3', macA3>) ]->
-  [ St_A_4(I, ~id, kAB, x, y, R), Out(<'3', macA3>) ]
+  [ St_A_4(I, ~id, kAB, kBA, x, y, R), Out(<'3', macA3>) ]
 
 
 // 3. B receive
 rule B_3_receive:
-  let macB3 = mac(kAB, <y, I, R>)
+  let macB3 = senc(y, kBA)
   in
-  [ St_B_3(R, ~id, kAB, x, y, I), In(<'3', macB3>) ]
+  [ St_B_3(R, ~id, kAB, kBA, x, y, I), In(<'3', macB3>) ]
 --[ Recv(R, <'3', macB3>), Commit(R, I, <'R', 'I', <x, y>>) ]->
-  [ St_B_4(R, ~id, kAB, x, y, I) ]
+  [ St_B_4(R, ~id, kAB, kBA, x, y, I) ]
 
 
 // 4. B send
 rule B_4_send:
-  let macB4 = mac(kAB, <x, I, R>)
+  let macB4 = senc(x, kAB)
   in
-  [ St_B_4(R, ~id, kAB, x, y, I) ]
+  [ St_B_4(R, ~id, kAB, kBA, x, y, I) ]
 --[ Send(R, <'4', macB4>) ]->
-  [ St_B_5(R, ~id, kAB, x, y, I), Out(<'4', macB4>) ]
+  [ St_B_5(R, ~id, kAB, kBA, kBA, x, y, I), Out(<'4', macB4>) ]
 
 
 // 4. A receive
 rule A_4_receive:
-  let macA4 = mac(kAB, <x, I, R>)
+  let macA4 = senc(x, kAB)
   in
-  [ St_A_4(I, ~id, kAB, x, y, I), In(<'4', macA4>) ]
+  [ St_A_4(I, ~id, kAB, kBA, x, y, R), In(<'4', macA4>) ]
 --[ Recv(I, <'4', macA4>), Commit(I, R, <'I', 'R', <x, y>>), Honest(I), Honest(R), Finish() ]->
-  [ St_A_5(I, ~id, kAB, x, y, I) ]
+  [ St_A_5(I, ~id, kAB, kBA, x, y, R) ]
 
 
 /**
