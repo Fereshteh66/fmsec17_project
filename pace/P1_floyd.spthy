@@ -12,17 +12,17 @@ begin
 builtins: symmetric-encryption
 
 /* We want to formalize the following protocoll:
-	A -> B : x
-	B -> A : {x}_k(A,B)
+	R -> S : n
+	S -> R : {n}_k(R,S)
 */
 
 // Establish a shared key for two DIFFERENT parties O and P
 rule Establish_SharedKey:
-  [ Fr(~kPQ) ]
---[ Restrict_NEQ($P, $Q)
-  , Secret(~kPQ)
+  [ Fr(~kAB) ]
+--[ Restrict_NEQ($A, $B)
+  , Secret(~kAB)
   ]->
-  [ !SharedKey($P, $Q, ~kPQ) ]
+  [ !SharedKey($A, $B, ~kAB) ]
 
 // The adversary can reveal the shared key of victims V and W
 // Here it should suffice to simply imply that either of the key has been compromised.
@@ -34,56 +34,56 @@ rule Reveal:
 // Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
 
 // This is a very verbose formulation, in which states aren't collapsed
-// Initialize A
-rule Init_A:
-  [ Fr(~id), !SharedKey(A, B, kAB) ]
---[ Initialized(A, ~id) ]->
-  [ St_A_0(A, ~id, B, kAB) ]
+// Initialize R
+rule Init_R:
+  [ Fr(~id), !SharedKey(R, S, kRS) ]
+--[ Initialized(R, ~id) ]->
+  [ St_R_0(R, ~id, S, kRS) ]
 
-// Initialize B
-rule Init_B:
-  [ Fr(~id), !SharedKey(A, B, kAB) ]
---[ Initialized(B, ~id) ]->
-  [ St_B_0(B, ~id, A, kAB) ]
+// Initialize S
+rule Init_S:
+  [ Fr(~id), !SharedKey(R, S, kRS) ]
+--[ Initialized(S, ~id) ]->
+  [ St_S_0(S, ~id, R, kRS) ]
 
-// First message sent by A
-rule A_1_send:
+// First message sent by R
+rule R_1_send:
   let m = ~x
   in
-  [ St_A_0(A, id, B, kAB) 
+  [ St_R_0(R, id, S, kRS) 
   , Fr(~x) // the nonce
   ]
---[ Send(A, m) ]->
-  [ St_A_1(A, id, B, kAB, ~x)
+--[ Send(R, m) ]->
+  [ St_R_1(R, id, S, kRS, ~x)
   , Out(m)
   ]
 
-// First message received by B
-rule B_1_receive:
-  [ St_B_0(B, id, A, kAB)
-  , In(m) // the message, supposedly the nonce from A
+// First message received by S
+rule S_1_receive:
+  [ St_S_0(S, id, R, kRS)
+  , In(m) // the message, supposedly the nonce from R
   ]
---[ Recv(B, m) ]->
-  [ St_B_1(B, id, A, kAB, m) ]
+--[ Recv(S, m) ]->
+  [ St_S_1(S, id, R, kRS, m) ]
 
-// Message sent back by B
-rule B_2_send:
-  let m = senc(x, kAB)
+// Message sent back by S
+rule S_2_send:
+  let m = senc(x, kRS)
   in
-  [ St_B_1(B, id, A, kAB, x) ]
---[ Send(B,m)
-  , Running(B, A, x) ]->
-  [ Out(m)] // no further state of B needed at this point
+  [ St_S_1(S, id, R, kRS, x) ]
+--[ Send(S,m)
+  , Running(S, R, x) ]->
+  [ Out(m)] // no further state of S needed at this point
 
-// Sent back message received by A
-rule A_2_receive:
-  let m = senc(x, kAB)
+// Sent back message received by R
+rule R_2_receive:
+  let m = senc(x, kRS)
   in
-  [ St_A_1(A, id, B, kAB, x)
+  [ St_R_1(R, id, S, kRS, x)
   , In(m)
   ]
---[ Recv(A, m)
-  , Commit(A, B, x) ]->
+--[ Recv(R, m)
+  , Commit(R, S, x) ]->
   []
 
 restriction NEQ:
