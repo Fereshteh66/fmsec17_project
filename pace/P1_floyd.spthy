@@ -1,7 +1,8 @@
 /*
 Protocoll P1 implemented by Floyd
 
-V1: Simply send the nonce back and forth as well as some sanity checks
+V1: Simply send the nonce back and forth as well as some sanity checks.
+V2: Add secrecy lemmas.
 */
 
 theory P1
@@ -17,14 +18,16 @@ builtins: symmetric-encryption
 // Establish a shared key for two DIFFERENT parties O and P
 rule Establish_SharedKey:
   [ Fr(~kPQ) ]
---[ Restrict_NEQ($P, $Q) ]->
+--[ Restrict_NEQ($P, $Q)
+  , Secret(~kPQ)
+  ]->
   [ !SharedKey($P, $Q, ~kPQ) ]
 
 // The adversary can reveal the shared key of victims V and W
 // Here it should suffice to simply imply that either of the the partners has been compromised.
 rule Reveal:
   [ !SharedKey(V, W, kVW) ]
---[ Reveal(V), Reveal(W) ]->
+--[ Reveal(kVW) ]->
   [ Out(kVW) ]
 
 // Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
@@ -85,12 +88,18 @@ restriction NEQ:
 
 
 // Simplistic Executability test
-lemma executable:
-exists-trace
+lemma executable: exists-trace
   " Ex P Q m #i #j. Send(P, m) @i & Recv(Q, m) @j "
 
 // Check wether the intruder can act as a participant
-lemma intruder_participation:
-exists-trace
+lemma intruder_participation: exists-trace
   " Ex Q m #j. not(Ex P #i. Send(P, m) @i) & Recv(Q, m) @j "
+
+// secrecy of all keys except if they are revealed
+lemma key_secrecy: all-traces
+  " All key #i. 
+    Secret(key) @i ==>
+    not( Ex #j. K(key) @j ) | ( Ex #k. Reveal(key) @k)
+  "
+
 end
