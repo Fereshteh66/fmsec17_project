@@ -3,6 +3,7 @@ Protocoll P1 implemented by Floyd
 
 V1: Simply send the nonce back and forth as well as some sanity checks.
 V2: Add secrecy lemmas.
+V3: Add checks for unidirectional, injective agreement on the nounce. Based directly on the lecture slides and Tamarin manual.
 */
 
 theory P1
@@ -24,7 +25,7 @@ rule Establish_SharedKey:
   [ !SharedKey($P, $Q, ~kPQ) ]
 
 // The adversary can reveal the shared key of victims V and W
-// Here it should suffice to simply imply that either of the the partners has been compromised.
+// Here it should suffice to simply imply that either of the key has been compromised.
 rule Reveal:
   [ !SharedKey(V, W, kVW) ]
 --[ Reveal(kVW) ]->
@@ -32,7 +33,7 @@ rule Reveal:
 
 // Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
 
-// This is a very verbose formulation, in which state aren't collapsed
+// This is a very verbose formulation, in which states aren't collapsed
 // Initialize A
 rule Init_A:
   [ Fr(~id), !SharedKey(A, B, kAB) ]
@@ -70,7 +71,8 @@ rule B_2_send:
   let m = senc(x, kAB)
   in
   [ St_B_1(B, id, A, kAB, x) ]
---[ Send(B,m) ]->
+--[ Send(B,m)
+  , Running(B, A, x) ]->
   [ Out(m)] // no further state of B needed at this point
 
 // Sent back message received by A
@@ -80,7 +82,8 @@ rule A_2_receive:
   [ St_A_1(A, id, B, kAB, x)
   , In(m)
   ]
---[ Recv(A, m) ]->
+--[ Recv(A, m)
+  , Commit(A, B, x) ]->
   []
 
 restriction NEQ:
@@ -97,9 +100,18 @@ lemma intruder_participation: exists-trace
 
 // secrecy of all keys except if they are revealed
 lemma key_secrecy: all-traces
-  " All key #i. 
-    Secret(key) @i ==>
-    not( Ex #j. K(key) @j ) | ( Ex #k. Reveal(key) @k)
+  " All key #i. Secret(key) @i
+==> not( Ex #j. K(key) @j ) | ( Ex #k. Reveal(key) @k)
+  "
+
+// injective agreement on a term
+lemma injective_agreement: all-traces
+  " All P O t #i. Commit(P, O, t) @i
+==> ( Ex #j. Running(O, P, t) @j
+    & j < i
+    & not( Ex Palt Oalt #ialt. Commit(Palt, Oalt, t) @ialt & not(#ialt = #i) )
+    )
+  | ( Ex k #r. Reveal(k) @r )
   "
 
 end
