@@ -1,0 +1,96 @@
+/*
+Protocoll P1 implemented by Floyd
+
+V1: Simply send the nonce back and forth as well as some sanity checks
+*/
+
+theory P1
+begin
+
+builtins: symmetric-encryption
+
+/* We want to formalize the following protocoll:
+	A -> B : x
+	B -> A : {x}_k(A,B)
+*/
+
+// Establish a shared key for two DIFFERENT parties O and P
+rule Establish_SharedKey:
+  [ Fr(~kPQ) ]
+--[ Restrict_NEQ($P, $Q) ]->
+  [ !SharedKey($P, $Q, ~kPQ) ]
+
+// The adversary can reveal the shared key of victims V and W
+// Here it should suffice to simply imply that either of the the partners has been compromised.
+rule Reveal:
+  [ !SharedKey(V, W, kVW) ]
+--[ Reveal(V), Reveal(W) ]->
+  [ Out(kVW) ]
+
+// Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
+
+// This is a very verbose formulation, in which state aren't collapsed
+// Initialize A
+rule Init_A:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Initialized(A, ~id) ]->
+  [ St_A_0(A, ~id, B, kAB) ]
+
+// Initialize B
+rule Init_B:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Initialized(B, ~id) ]->
+  [ St_B_0(B, ~id, A, kAB) ]
+
+// First message sent by A
+rule A_1_send:
+  let m = ~x
+  in
+  [ St_A_0(A, id, B, kAB) 
+  , Fr(~x) // the nonce
+  ]
+--[ Send(A, m) ]->
+  [ St_A_1(A, id, B, kAB, ~x)
+  , Out(m)
+  ]
+
+// First message received by B
+rule B_1_receive:
+  [ St_B_0(B, id, A, kAB)
+  , In(m) // the message, supposedly the nonce from A
+  ]
+--[ Recv(B, m) ]->
+  [ St_B_1(B, id, A, kAB, m) ]
+
+// Message sent back by B
+rule B_2_send:
+  let m = senc(x, kAB)
+  in
+  [ St_B_1(B, id, A, kAB, x) ]
+--[ Send(B,m) ]->
+  [ Out(m)] // no further state of B needed at this point
+
+// Sent back message received by A
+rule A_2_receive:
+  let m = senc(x, kAB)
+  in
+  [ St_A_1(A, id, B, kAB, x)
+  , In(m)
+  ]
+--[ Recv(A, m) ]->
+  []
+
+restriction NEQ:
+  " All x y #i. Restrict_NEQ(x, y) @i ==> not( x = y ) "
+
+
+// Simplistic Executability test
+lemma executable:
+exists-trace
+  " Ex P Q m #i #j. Send(P, m) @i & Recv(Q, m) @j "
+
+// Check wether the intruder can act as a participant
+lemma intruder_participation:
+exists-trace
+  " Ex Q m #j. not(Ex P #i. Send(P, m) @i) & Recv(Q, m) @j "
+end
