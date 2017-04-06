@@ -3,6 +3,7 @@ begin
 
 
 builtins: symmetric-encryption
+functions: mac/2
 
 /*
 	We want to formalize the following protocol
@@ -67,7 +68,7 @@ rule A_2_receive:
 
 // 3. A send
 rule A_3_send:
-  let macA3 = senc(y, kBA)
+  let macA3 = mac(y, kBA)
   in
   [ St_A_3(I, ~id, kAB, kBA, x, y, R) ]
 --[ Send(I, <'3', macA3>) ]->
@@ -76,16 +77,16 @@ rule A_3_send:
 
 // 3. B receive
 rule B_3_receive:
-  let macB3 = senc(y, kBA)
+  let macB3 = mac(y, kBA)
   in
   [ St_B_3(R, ~id, kAB, kBA, x, y, I), In(<'3', macB3>) ]
---[ Recv(R, <'3', macB3>), Commit(R, I, <'R', 'I', <x, y>>) ]->
+--[ Recv(R, <'3', macB3>), Commit(R, I, <'R', 'I', <x, y>>), Honest(I), Honest(R) ]->
   [ St_B_4(R, ~id, kAB, kBA, x, y, I) ]
 
 
 // 4. B send
 rule B_4_send:
-  let macB4 = senc(x, kAB)
+  let macB4 = mac(x, kAB)
   in
   [ St_B_4(R, ~id, kAB, kBA, x, y, I) ]
 --[ Send(R, <'4', macB4>) ]->
@@ -94,7 +95,7 @@ rule B_4_send:
 
 // 4. A receive
 rule A_4_receive:
-  let macA4 = senc(x, kAB)
+  let macA4 = mac(x, kAB)
   in
   [ St_A_4(I, ~id, kAB, kBA, x, y, R), In(<'4', macA4>) ]
 --[ Recv(I, <'4', macA4>), Commit(I, R, <'I', 'R', <x, y>>), Honest(I), Honest(R), Finish() ]->
@@ -148,10 +149,12 @@ lemma injectiveagreementRESPONDER:
 restriction noselfkey:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
 
+
+/* I'm not sure if we can do that, because of a too tight restriction. (refering to discussion of the exercise session) */
 restriction noselfcommunication:
   "(All X Y id1 id2 #i #j. Create_A(X, id1)@i & Create_A(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
    & (All X Y id1 id2 #i #j. Create_B(X, id1)@i & Create_B(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
-   
+
 restriction onlyonekeysetup:
   " All X Y #i #j. KeySetup(X, Y)@i & KeySetup(X, Y)@j ==> #i = #j"
 

@@ -2,6 +2,7 @@ theory P1
 begin
 
 builtins: symmetric-encryption
+functions: mac/2
 
 /*
 	We want to formalize the following protocol
@@ -52,7 +53,7 @@ rule B_1_receive:
 
 // 2. B send
 rule B_2_send:
-  let macB2 = senc(x, kAB)
+  let macB2 = mac(x, kAB)
   in
   [ St_B_2(R, ~id, kAB, x, I) ]
 --[ Send(R, <'2', macB2>) ]->
@@ -60,10 +61,10 @@ rule B_2_send:
 
 // 2. A receive
 rule A_2_receive:
-  let macA2 = senc(y, kAB)
+  let macA2 = mac(x, kAB)
   in
   [ St_A_2(I, ~id, kAB, x, R), In(<'2', macA2>) ]
---[ Recv(I, <'2', macA2>), Equal(x, y), Commit(I, R, <'I', 'R', x>), Honest(I), Finish() ]->
+--[ Recv(I, <'2', macA2>), Commit(I, R, <'I', 'R', x>), Honest(I), Finish() ]->
   [ St_A_3(I, ~id, kAB, x, R) ]
 
 
@@ -96,8 +97,5 @@ lemma injectiveagreementINITIATOR:
 **/
 restriction noselfcommunication:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
-
-restriction equal_nounce:
-  " All x y #i. Equal(x, y) @ i ==> x = y"
 
 end
