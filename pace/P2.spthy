@@ -17,7 +17,7 @@ builtins: symmetric-encryption
 // Setup a shared key with two parties
 rule SetupKey:
   [ Fr(~shk) ]
---[ NotEq($A, $B) ]->
+--[ KeySetup($A, $B), NotEq($A, $B) ]->
   [ !SharedKey($A, $B, ~shk) ]
 
 
@@ -56,7 +56,7 @@ rule B_1_receive:
 // 2. B send
 rule B_2_send:
   [ St_B_2(R, ~id, kAB, kBA, x, I), Fr(~y) ]
---[ Send(R, <'2', ~y>), Running(R, I, <'I', R, <x, ~y>>) ]->
+--[ Send(R, <'2', ~y>), Running(R, I, <'I', 'R', <x, ~y>>) ]->
   [ St_B_3(R, ~id, kAB, kBA, x, ~y, I), Out(<'2', ~y>) ]
 
 // 2. A receive
@@ -145,7 +145,15 @@ lemma injectiveagreementRESPONDER:
 /**
 	Restrictions
 **/
-restriction noselfcommunication:
+restriction noselfkey:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
+
+restriction noselfcommunication:
+  "(All X Y id1 id2 #i #j. Create_A(X, id1)@i & Create_A(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
+   & (All X Y id1 id2 #i #j. Create_B(X, id1)@i & Create_B(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
+   
+restriction onlyonekeysetup:
+  " All X Y #i #j. KeySetup(X, Y)@i & KeySetup(X, Y)@j ==> #i = #j"
+
 
 end
