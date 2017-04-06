@@ -1,0 +1,3 @@
+Label/tag/number sent messages.
+Initialize the actors, including all keys etc.
+Ammend lemmas (executable) such that the Tamarin automatically comes up with correct dependency graphs. 

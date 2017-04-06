@@ -1,79 +1,140 @@
+/*
+Protocoll P1 implemented by Floyd
+
+V1: Simply send the nonce back and forth as well as some sanity checks.
+V2: Add secrecy lemmas.
+V3: Add checks for unidirectional, injective agreement on the nounce. Based directly on the lecture slides and Tamarin manual.
+V4: Adapt to recommendations and clearly distinguish between role and name.
+*/
+
+/* We want to formalize the following protocoll:
+	R -> S : <1, na>
+	S -> R : { <2, nb> }_k(R,S)
+*/
+
 theory P1
 begin
 
 builtins: symmetric-encryption
 
-/*
-	We want to formalize the following protocol
-	protocol {
-		1. A -> B: {'1', x}
-		2. B -> A: {'2', x}k(A,B)
-	}
-*/
-
-
-// Setup a shared key with two parties
-rule SetupKey:
+// Establish a shared key for two DIFFERENT parties O and P
+rule Establish_SharedKey:
   [ Fr(~kAB) ]
---[ NotEq($A, $B) ]->
+--[ Restrict_NEQ($A, $B)
+  , Secret($A, ~kAB), Honest($A) // A holds the secret kAB
+  , Secret($B, ~kAB), Honest($B) // B holds the secret kAB
+  ]->
   [ !SharedKey($A, $B, ~kAB) ]
 
-
+// The adversary can reveal the shared key of victims V and W
+// Here it should suffice to simply imply that either of the key has been compromised.
 rule Reveal:
-  [ !SharedKey(A, B, kAB)]
---[ Reveal(A), Reveal(B) ]->
-  [ Out(kAB) ]
+  [ !SharedKey(V, W, kVW) ]
+--[ Reveal(V), Reveal(W) ]->
+  [ Out(kVW) ]
 
+// Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
 
-// Initialize A
-rule Init_A:
-  [ Fr(~id) , !SharedKey(I, R, kAB) ]
---[ Create_A(I, ~id) ]->
-  [ St_A_1(I, ~id, kAB, R) ]
+/*
+  Initialization
+*/
+// Initialize R
+rule Init_R:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create(A, ~id, 'R') ]->
+  [ St_R_0(A, ~id, B, kAB) ]
 
-// Initialize B
-rule Init_B:
-  [ Fr(~id), !SharedKey(I, R, kAB) ]
---[ Create_B(R, ~id) ]->
-  [ St_B_1(R, ~id, kAB, I) ]
+// Initialize S
+rule Init_S:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create(B, ~id, 'S') ]->
+  [ St_S_0(B, ~id, A, kAB) ]
 
-// 1. A send
-rule A_1_send:
-  [ St_A_1(I, ~id, kAB, R), Fr(~x) ]
---[ Send(I, <'1', ~x>) ]->
-  [ St_A_2(I, ~id, kAB, ~x, R), Out(<'1', ~x>) ]
+/*
+  Protocol
+*/
 
-// 1. B receive
-rule B_1_receive:
-  [ St_B_1(R, ~id, kAB, I), In(<'1', x>) ]
---[ Recv(R, <'1', x>), Running(R, I, <'I', 'R', x>) ]->
-  [ St_B_2(R, ~id, kAB, x, I) ]
+/* R -> S : <1, na> */
 
-
-// 2. B send
-rule B_2_send:
-  let macB2 = senc(x, kAB)
+// First message sent by R
+rule R_1_send:
+  let m = <'1', ~na>
   in
-  [ St_B_2(R, ~id, kAB, x, I) ]
---[ Send(R, <'2', macB2>) ]->
-  [ St_B_3(R, ~id, kAB, x, I), Out(<'2', macB2>) ]
+  [ St_R_0(A, id, B, kAB) 
+  , Fr(~na) // the nonce
+  ]
+--[ Send(A, m)
+  , Start()
+  ]->
+  [ St_R_1(A, id, B, kAB, ~na)
+  , Out(m)
+  ]
 
-// 2. A receive
-rule A_2_receive:
-  let macA2 = senc(y, kAB)
+// First message received by S
+rule S_1_receive:
+  let m = <'1', na>
   in
-  [ St_A_2(I, ~id, kAB, x, R), In(<'2', macA2>) ]
---[ Recv(I, <'2', macA2>), Equal(x, y), Commit(I, R, <'I', 'R', x>), Honest(I), Finish() ]->
-  [ St_A_3(I, ~id, kAB, x, R) ]
+  [ St_S_0(B, id, A, kAB)
+  , In(m) // the message, supposedly the nonce from R
+  ]
+--[ Recv(B, m) ]->
+  [ St_S_1(B, id, A, kAB, na) ]
+
+/* S -> R : { <2, nb> }_k(R,S) */
+
+// Message sent back by S
+rule S_2_send:
+  let m = <'2', senc(na, kAB)>
+  in
+  [ St_S_1(B, id, A, kAB, na) ]
+--[ Send(B,m)
+  , Running(B, A, <'I', 'R', na>) 
+  ]->
+  [ St_S_2(B, id, A, kAB, na)
+  , Out(m)
+  ] 
+
+// Sent back message received by R
+rule R_2_receive:
+  let m = <'2', senc(na, kAB)>
+  in
+  [ St_R_1(A, id, B, kAB, na)
+  , In(m)
+  ]
+--[ Recv(A, m)
+  , Commit(A, B, <'I', 'R', na>), Honest(A), Honest(B) // A and B are required to be honest at this moment
+  , End()
+  ]->
+  [ St_R_2(A, id, B, kAB, na) ]
+
+/*
+  Restrictions
+*/
+restriction NEQ:
+  " All x y #i. Restrict_NEQ(x, y) @i ==> not( x = y ) "
 
 
-/**
-	Lemmas
-**/
+// Simplistic Executability test
+lemma executable: exists-trace
+  " Ex #i #j. Start() @i & End() @j "
 
-lemma executable:
-  exists-trace
-    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+// Check wether the intruder can act as a participant
+lemma intruder_participation: exists-trace
+  " Ex Q m #j. not(Ex P #i. Send(P, m) @i) & Recv(Q, m) @j "
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+/*
+lemma secrecy_PFS:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
+*/
 
 lemma noninjectiveagreementINITIATOR:
   "All a b t #i. 
@@ -90,14 +151,22 @@ lemma injectiveagreementINITIATOR:
                            & not (#i2 = #i)))
               | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
+/*
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
-/**
-	Restrictions
-**/
-restriction noselfcommunication:
-  " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+*/
 
-restriction equal_nounce:
-  " All x y #i. Equal(x, y) @ i ==> x = y"
 
 end
