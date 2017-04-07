@@ -8,14 +8,14 @@ V4: Adapt to recommendations and clearly distinguish between role and name.
 */
 
 /* We want to formalize the following protocoll:
-	R -> S : <1, na>
-	S -> R : { <2, nb> }_k(R,S)
+	A -> B : <1, na>
+	B -> A : <2, [nb]_k(A,B)>
 */
 
 theory P1
 begin
 
-builtins: symmetric-encryption
+functions: mac/2
 
 // Establish a shared key for two DIFFERENT parties O and P
 rule Establish_SharedKey:
@@ -27,7 +27,6 @@ rule Establish_SharedKey:
   [ !SharedKey($A, $B, ~kAB) ]
 
 // The adversary can reveal the shared key of victims V and W
-// Here it should suffice to simply imply that either of the key has been compromised.
 rule Reveal:
   [ !SharedKey(V, W, kVW) ]
 --[ Reveal(V), Reveal(W) ]->
@@ -63,9 +62,7 @@ rule R_1_send:
   [ St_R_0(A, id, B, kAB) 
   , Fr(~na) // the nonce
   ]
---[ Send(A, m)
-  , Start()
-  ]->
+--[ Send(A, m) ]->
   [ St_R_1(A, id, B, kAB, ~na)
   , Out(m)
   ]
@@ -84,11 +81,11 @@ rule S_1_receive:
 
 // Message sent back by S
 rule S_2_send:
-  let m = <'2', senc(na, kAB)>
+  let m = <'2', mac(na, kAB)>
   in
   [ St_S_1(B, id, A, kAB, na) ]
 --[ Send(B,m)
-  , Running(B, A, <'I', 'R', na>) 
+  , Running(B, A, <'S', 'R', na>) 
   ]->
   [ St_S_2(B, id, A, kAB, na)
   , Out(m)
@@ -96,13 +93,13 @@ rule S_2_send:
 
 // Sent back message received by R
 rule R_2_receive:
-  let m = <'2', senc(na, kAB)>
+  let m = <'2', mac(na, kAB)>
   in
   [ St_R_1(A, id, B, kAB, na)
   , In(m)
   ]
 --[ Recv(A, m)
-  , Commit(A, B, <'I', 'R', na>), Honest(A), Honest(B) // A and B are required to be honest at this moment
+  , Commit(A, B, <'S', 'R', na>), Honest(A), Honest(B) // A and B are required to be honest at this moment
   , End()
   ]->
   [ St_R_2(A, id, B, kAB, na) ]
@@ -116,7 +113,7 @@ restriction NEQ:
 
 // Simplistic Executability test
 lemma executable: exists-trace
-  " Ex #i #j. Start() @i & End() @j "
+  " (Ex #i. End() @i) & not(Ex X #j. Reveal(X) @j) "
 
 // Check wether the intruder can act as a participant
 lemma intruder_participation: exists-trace
@@ -128,45 +125,20 @@ lemma secrecy:
     not (Ex #j. K(x)@j)
         | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
-/*
-lemma secrecy_PFS:
-  "All A x #i. 
-    Secret(A,x) @i ==> 
-    not (Ex #j. K(x)@j)
-        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
-*/
-
 lemma noninjectiveagreementINITIATOR:
   "All a b t #i. 
-    Commit(a,b,<'I','R',t>) @i
-    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+    Commit(a,b,<'S','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'S','R',t>) @j)
         | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 lemma injectiveagreementINITIATOR:
   "All a b t #i. 
-    Commit(a,b,<'I','R',t>) @i
-    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+    Commit(a,b,<'S','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'S','R',t>) @j 
         & j < i
-        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'S','R',t>) @i2
                            & not (#i2 = #i)))
               | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
-
-/*
-lemma noninjectiveagreementRESPONDER:
-  "All a b t #i. 
-    Commit(a,b,<'R','I',t>) @i
-    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
-        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
-
-lemma injectiveagreementRESPONDER:
-  "All a b t #i. 
-    Commit(a,b,<'R','I',t>) @i
-    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
-              & j < i
-              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
-                                 & not (#i2 = #i)))
-              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
-*/
 
 
 end
