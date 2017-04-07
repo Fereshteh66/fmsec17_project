@@ -39,13 +39,17 @@ rule Reveal:
 // Initialize R
 rule Init_R:
   [ Fr(~id), !SharedKey(A, B, kAB), !SharedKey(B, A, kBA) ]
---[ Create(A, ~id, 'R') ]->
+--[ Create(A, ~id, 'R')
+//  , Restrict_unique('role_R') // Is this correct or am I doing too much?
+   ]->
   [ St_R_0(A, ~id, B, kAB, kBA) ]
 
 // Initialize S
 rule Init_S:
   [ Fr(~id), !SharedKey(A, B, kAB), !SharedKey(B, A, kBA) ]
---[ Create(B, ~id, 'S') ]->
+--[ Create(B, ~id, 'S')
+//  , Restrict_unique('role_S') // Is this correct or am I doing too much?
+  ]->
   [ St_S_0(B, ~id, A, kAB, kBA) ]
 
 /*
@@ -152,9 +156,7 @@ restriction NEQ:
   " All x y #i. Restrict_NEQ(x, y) @i ==> not( x = y ) "
 
 restriction unique:
-  " All x #i. Restrict_unique(x) @i ==>
-    not( Ex #j. Restrict_unique(x) @j & not(#i=#j) )
-  "
+  " All x #i #j. Restrict_unique(x) @i & Restrict_unique(x) @j ==> #i=#j "
 
 // Simplistic Executability test
 lemma executable: exists-trace
@@ -170,11 +172,13 @@ lemma secrecy:
     not (Ex #j. K(x)@j)
         | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
+/*
 lemma secrecy_PFS:
   "All A x #i. 
     Secret(A,x) @i ==> 
     not (Ex #j. K(x)@j)
         | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
+*/
 
 lemma noninjectiveagreementINITIATOR:
   "All a b t #i. 
