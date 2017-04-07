@@ -1,0 +1,215 @@
+/*
+Protocoll P2b implemented by Floyd
+
+*/
+
+/* We want to formalize the following protocoll:
+	A -> B : <1, na>
+    B -> A : <2, nb>
+    A -> B : <3, [nb]_k(B,A)>
+	B -> A : <4, [na]_k(A,B)>
+*/
+
+theory P2a
+begin
+
+functions: mac/2
+
+// Establish a shared key for two DIFFERENT parties O and P
+rule Establish_SharedKey:
+  [ Fr(~kAB) ]
+--[ Restrict_NEQ($A, $B)
+  , Restrict_unique(<'SharedKey', $A, $B>)
+  , Secret($A, ~kAB), Honest($A) // A holds the secret kAB
+  , Secret($B, ~kAB), Honest($B) // B holds the secret kAB
+  ]->
+  [ !SharedKey($A, $B, ~kAB) ]
+
+// The adversary can reveal the shared key of victims V and W
+rule Reveal:
+  [ !SharedKey(V, W, kVW) ]
+--[ Reveal(V), Reveal(W) ]->
+  [ Out(kVW) ]
+
+// Watch out: !SharedKey(A,B,kAB) <> !SharedKey(B,A,kBA)
+
+/*
+  Initialization
+*/
+// Initialize R
+rule Init_R:
+  [ Fr(~id), !SharedKey(A, B, kAB), !SharedKey(B, A, kBA) ]
+--[ Create(A, ~id, 'R')
+//  , Restrict_unique('role_R') // Is this correct or am I doing too much?
+   ]->
+  [ St_R_0(A, ~id, B, kAB, kBA) ]
+
+// Initialize S
+rule Init_S:
+  [ Fr(~id), !SharedKey(A, B, kAB), !SharedKey(B, A, kBA) ]
+--[ Create(B, ~id, 'S')
+//  , Restrict_unique('role_S') // Is this correct or am I doing too much?
+  ]->
+  [ St_S_0(B, ~id, A, kAB, kBA) ]
+
+/*
+  Protocol
+*/
+
+/*  A -> B : <1, na> */
+
+rule R_1_sendNonce:
+  let m = <'1', ~na>
+  in
+  [ St_R_0(A, id, B, kAB, kBA) 
+  , Fr(~na) // the nonce
+  ]
+--[ Send(A, m) ]->
+  [ St_R_1(A, id, B, kAB, kBA, ~na)
+  , Out(m)
+  ]
+
+rule S_1_receiveNonce:
+  let m = <'1', na>
+  in
+  [ St_S_0(B, id, A, kAB, kBA)
+  , In(m) // the message, supposedly the nonce from R
+  ]
+--[ Recv(B, m) ]->
+  [ St_S_1(B, id, A, kAB, kBA, na) ]
+
+/* B -> A : <2, nb> */
+
+rule S_2_sendNonce:
+  let m = <'2', ~nb>
+  in
+  [ St_S_1(B, id, A, kAB, kBA, na)
+  , Fr(~nb)
+  ]
+--[ Send(B, m) ]->
+  [ St_S_2(B, id, A, kAB, kBA, na, ~nb)
+  , Out(m)
+  ]
+
+rule R_2_receiveNonce:
+  let m = <'2', nb>
+  in
+  [ St_R_1(A, id, B, kAB, kBA, na)
+  , In(m)
+  ]
+--[ Recv(A, m) ]->
+  [ St_R_2(A, id, B, kAB, kBA, na, nb) ] 
+
+/* A -> B : <3, [nb]_k(B,A)> */
+
+rule R_3_sendMAC:
+  let m = <'3', mac(nb, kBA)>
+  in
+  [ St_R_2(A, id, B, kAB, kBA, na, nb) ]
+--[ Send(A, m)
+  , Running(A, B, <'R', 'S', nb>)
+  ]->
+  [ St_R_3(A, id, B, kAB, kBA, na, nb)
+  , Out(m)
+  ]
+
+rule S_3_receiveMAC:
+  let m = <'3', mac(nb, kBA)>
+  in
+  [  St_S_2(B, id, A, kAB, kBA, na, nb)
+  , In(m)
+  ]
+--[ Recv(B, m)
+  , Commit(B, A, <'R', 'S', nb>), Honest(A), Honest(B)
+  ]->
+  [ St_S_3(B, id, A, kAB, kBA, na, nb) ] 
+
+/* B -> A : <4, [na]_k(A,B)> */
+
+rule S_4_sendMAC:
+  let m = <'4', mac(na, kAB)>
+  in
+  [ St_S_3(B, id, A, kAB, kBA, na, nb) ] 
+--[ Send(B,m)
+  , Running(B, A, <'S', 'R', na>) 
+  ]->
+  [ St_S_4(B, id, A, kAB, kBA, na, nb)
+  , Out(m)
+  ] 
+
+rule R_4_receiveMAC:
+  let m = <'4', mac(na, kAB)>
+  in
+  [ St_R_3(A, id, B, kAB, kBA, na, nb)
+  , In(m)
+  ]
+--[ Recv(A, m)
+  , Commit(A, B, <'S', 'R', na>), Honest(A), Honest(B)
+  , End()
+  ]->
+  [ St_R_4(A, id, B, kAB, kBA, na, nb) ]
+
+/*
+  Restrictions
+*/
+restriction NEQ:
+  " All x y #i. Restrict_NEQ(x, y) @i ==> not( x = y ) "
+
+restriction unique:
+  " All x #i #j. Restrict_unique(x) @i & Restrict_unique(x) @j ==> #i=#j "
+
+// Simplistic Executability test
+lemma executable: exists-trace
+  " (Ex #i. End() @i) & not(Ex X #j. Reveal(X) @j) "
+
+// Check wether the intruder can act as a participant
+lemma intruder_participation: exists-trace
+  " Ex Q m #j. not(Ex P #i. Send(P, m) @i) & Recv(Q, m) @j "
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+/*
+lemma secrecy_PFS:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
+*/
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'S','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'S','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'S','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'S','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'S','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','S',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','S',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','S',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','S',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','S',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+end
