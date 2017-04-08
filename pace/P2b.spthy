@@ -4,10 +4,10 @@ Protocoll P2b implemented by Floyd
 */
 
 /* We want to formalize the following protocoll:
-	A -> B : <1, na>
-    B -> A : <2, nb>
-    A -> B : <3, [nb]_k(B,A)>
-	B -> A : <4, [na]_k(A,B)>
+	A -> B : <1, <A, 'R', na>>
+    B -> A : <2, <B, 'S', nb>>
+    A -> B : <3, [<B, 'S', nb>]_k(B,A)>
+	B -> A : <4, [<A, 'R', na>]_k(A,B)>
 */
 
 theory P2b
@@ -56,10 +56,11 @@ rule Init_S:
   Protocol
 */
 
-/*  A -> B : <1, na> */
+/*  A -> B : <1, <A, 'R', na>> */
 
 rule R_1_sendNonce:
-  let m = <'1', ~na>
+  let payload = <A, 'R', ~na>
+      m = <'1', payload>
   in
   [ St_R_0(A, id, B, kAB, kBA) 
   , Fr(~na) // the nonce
@@ -70,7 +71,8 @@ rule R_1_sendNonce:
   ]
 
 rule S_1_receiveNonce:
-  let m = <'1', na>
+  let payload = <A, 'R', na>
+      m = <'1', payload>
   in
   [ St_S_0(B, id, A, kAB, kBA)
   , In(m) // the message, supposedly the nonce from R
@@ -78,10 +80,11 @@ rule S_1_receiveNonce:
 --[ Recv(B, m) ]->
   [ St_S_1(B, id, A, kAB, kBA, na) ]
 
-/* B -> A : <2, nb> */
+/* B -> A : <2, <B, 'S', nb>> */
 
 rule S_2_sendNonce:
-  let m = <'2', ~nb>
+  let payload = <B, 'S', ~nb>
+      m = <'2', payload>
   in
   [ St_S_1(B, id, A, kAB, kBA, na)
   , Fr(~nb)
@@ -92,7 +95,8 @@ rule S_2_sendNonce:
   ]
 
 rule R_2_receiveNonce:
-  let m = <'2', nb>
+  let payload = <B, 'S', nb>
+      m = <'2', payload>
   in
   [ St_R_1(A, id, B, kAB, kBA, na)
   , In(m)
@@ -100,10 +104,11 @@ rule R_2_receiveNonce:
 --[ Recv(A, m) ]->
   [ St_R_2(A, id, B, kAB, kBA, na, nb) ] 
 
-/* A -> B : <3, [nb]_k(B,A)> */
+/* A -> B : <3, [<B, 'S', nb>]_k(B,A)> */
 
 rule R_3_sendMAC:
-  let m = <'3', mac(nb, kBA)>
+  let payload = mac(<B, 'S', nb>, kBA)
+      m = <'3', payload>
   in
   [ St_R_2(A, id, B, kAB, kBA, na, nb) ]
 --[ Send(A, m)
@@ -114,7 +119,8 @@ rule R_3_sendMAC:
   ]
 
 rule S_3_receiveMAC:
-  let m = <'3', mac(nb, kBA)>
+  let payload = mac(<B, 'S',nb>, kBA)
+      m = <'3', payload>
   in
   [  St_S_2(B, id, A, kAB, kBA, na, nb)
   , In(m)
@@ -124,10 +130,11 @@ rule S_3_receiveMAC:
   ]->
   [ St_S_3(B, id, A, kAB, kBA, na, nb) ] 
 
-/* B -> A : <4, [na]_k(A,B)> */
+/* B -> A : <4, [<A, 'R', na>]_k(A,B)> */
 
 rule S_4_sendMAC:
-  let m = <'4', mac(na, kAB)>
+  let payload = mac(<A, 'R', na>, kAB)
+      m = <'4', payload>
   in
   [ St_S_3(B, id, A, kAB, kBA, na, nb) ] 
 --[ Send(B,m)
@@ -138,7 +145,8 @@ rule S_4_sendMAC:
   ] 
 
 rule R_4_receiveMAC:
-  let m = <'4', mac(na, kAB)>
+  let payload = mac(<A, 'R', na>, kAB)
+      m = <'4', payload>
   in
   [ St_R_3(A, id, B, kAB, kBA, na, nb)
   , In(m)
