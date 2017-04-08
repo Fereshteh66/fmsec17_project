@@ -10,7 +10,7 @@ Protocoll P2b implemented by Floyd
 	B -> A : <4, [na]_k(A,B)>
 */
 
-theory P2a
+theory P2b
 begin
 
 functions: mac/2
