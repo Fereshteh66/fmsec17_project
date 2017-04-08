@@ -1,6 +1,11 @@
 /*
 Protocoll P2a implemented by Floyd
 
+In this form A and B can be instantiated as R and made to MAC eachother's nonces.
+This leads me to the question of how much we are allowed to assume.
+PACE is a protocoll between an ID card and a terminal so both A and B intrinsically know what they are.
+I therefore suggest the introduction of a persistent terminal fact for B such that shared keys can only be established if B is a terminal.
+This leaves open the possibility of malicious agents to act as card and terminal at the same time and so on.
 */
 
 /* We want to formalize the following protocoll:
