@@ -4,13 +4,12 @@ begin
 
 builtins: symmetric-encryption
 functions: mac/2
-equations:
-  mac(mac(a, k), k) = a
+
 
 /*
 	We want to formalize the following protocol
 	protocol {
-		1. A -> B: {'1', x}
+    1. A -> B: {'1', x}
     2. B -> A: {'2', <y, x>}_k(A,B)
     3. A -> B: {'3', y}_k(B,A)
 	}
