@@ -57,7 +57,7 @@ rule R_1_receive:
 // 2. R send
 rule R_2_send:
   [ St_R_2(B, ~id, kAB, kBA, x, A), Fr(~y) ]
---[ Send(B, <'2', ~y>), Running(B, A, <'I', 'R', <x, ~y>>) ]->
+--[ Send(B, <'2', ~y>) ]->
   [ St_R_3(B, ~id, kAB, kBA, x, ~y, A), Out(<'2', ~y>) ]
 
 // 2. I receive
@@ -71,7 +71,7 @@ rule I_3_send:
   let macA3 = mac(y, kBA)
   in
   [ St_I_3(A, ~id, kAB, kBA, x, y, B) ]
---[ Send(A, <'3', macA3>) ]->
+--[ Send(A, <'3', macA3>), Running(A, B, <'R', 'I', <x, y>>) ]->
   [ St_I_4(A, ~id, kAB, kBA, x, y, B), Out(<'3', macA3>) ]
 
 
@@ -80,7 +80,7 @@ rule R_3_receive:
   let macB3 = mac(y, kBA)
   in
   [ St_R_3(B, ~id, kAB, kBA, x, y, A), In(<'3', macB3>) ]
---[ Recv(B, <'3', macB3>), Commit(B, A, <'R', 'I', <x, y>>), Honest(A), Honest(B) ]->
+--[ Recv(B, <'3', macB3>), Commit(B, A, <'R', 'I', <x, y>>), Running(B, A, <'I', 'R', <x, y>>), Honest(B) ]->
   [ St_R_4(B, ~id, kAB, kBA, x, y, A) ]
 
 
@@ -98,7 +98,7 @@ rule I_4_receive:
   let macA4 = mac(x, kAB)
   in
   [ St_I_4(A, ~id, kAB, kBA, x, y, B), In(<'4', macA4>) ]
---[ Recv(A, <'4', macA4>), Commit(A, B, <'I', 'R', <x, y>>), Honest(A), Honest(B), Finish() ]->
+--[ Recv(A, <'4', macA4>), Commit(A, B, <'I', 'R', <x, y>>), Honest(A), Finish() ]->
   [ St_I_5(A, ~id, kAB, kBA, x, y, B) ]
 
 
