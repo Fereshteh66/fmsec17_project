@@ -27,45 +27,45 @@ rule Reveal:
 
 
 // Initialize Initiator
-rule Init_I:
-  [ Fr(~id) , !SharedKey(A, B, kAB) ]
---[ Create_I(B, ~id) ]->
-  [ St_A_1(A, ~id, kAB, B) ]
+rule Init_A:
+  [ Fr(~id) , !SharedKey(I, R, kAB) ]
+--[ Create_A(I, ~id) ]->
+  [ St_A_1(I, ~id, kAB, R) ]
 
 // Initialize Responder
-rule Init_R:
-  [ Fr(~id), !SharedKey(A, B, kAB) ]
---[ Create_R(B, ~id) ]->
-  [ St_B_1(B, ~id, kAB, A) ]
+rule Init_B:
+  [ Fr(~id), !SharedKey(I, R, kAB) ]
+--[ Create_B(R, ~id) ]->
+  [ St_B_1(R, ~id, kAB, I) ]
 
 // 1. Initiator send
-rule I_1_send:
-  [ St_A_1(A, ~id, kAB, B), Fr(~x) ]
---[ Send(A, <'1', ~x>) ]->
-  [ St_A_2(A, ~id, kAB, ~x, B), Out(<'1', ~x>) ]
+rule A_1_send:
+  [ St_A_1(I, ~id, kAB, R), Fr(~x) ]
+--[ Send(I, <'1', ~x>) ]->
+  [ St_A_2(I, ~id, kAB, ~x, R), Out(<'1', ~x>) ]
 
 // 1. Responder receive
-rule R_1_receive:
-  [ St_B_1(B, ~id, kAB, A), In(<'1', x>) ]
---[ Recv(B, <'1', x>), Running(B, A, <'I', 'R', x>) ]->
-  [ St_B_2(B, ~id, kAB, x, A) ]
+rule B_1_receive:
+  [ St_B_1(R, ~id, kAB, I), In(<'1', x>) ]
+--[ Recv(R, <'1', x>), Running(R, I, <'I', 'R', x>) ]->
+  [ St_B_2(R, ~id, kAB, x, I) ]
 
 
 // 2. Responder send
-rule R_2_send:
+rule B_2_send:
   let macB2 = mac(x, kAB)
   in
-  [ St_B_2(B, ~id, kAB, x, A) ]
---[ Send(B, <'2', macB2>) ]->
-  [ St_B_3(B, ~id, kAB, x, A), Out(<'2', macB2>) ]
+  [ St_B_2(R, ~id, kAB, x, I) ]
+--[ Send(R, <'2', macB2>) ]->
+  [ St_B_3(R, ~id, kAB, x, I), Out(<'2', macB2>) ]
 
 // 2. Initiator receive
-rule I_2_receive:
+rule A_2_receive:
   let macA2 = mac(x, kAB)
   in
-  [ St_A_2(A, ~id, kAB, x, B), In(<'2', macA2>) ]
---[ Recv(A, <'2', macA2>), Commit(A, B, <'I', 'R', x>), Honest(A), Finish() ]->
-  [ St_A_3(A, ~id, kAB, x, B) ]
+  [ St_A_2(I, ~id, kAB, x, R), In(<'2', macA2>) ]
+--[ Recv(I, <'2', macA2>), Commit(I, R, <'I', 'R', x>), Honest(I), Finish() ]->
+  [ St_A_3(I, ~id, kAB, x, R) ]
 
 
 /**
