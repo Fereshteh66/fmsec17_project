@@ -1,0 +1,100 @@
+theory P3a
+begin
+
+
+functions: kdf/3, mac/2
+
+/*
+	We somehow need to define this key function. This below results in an error though.
+	equations:
+  		Kab = kdf(kAB, x, y)
+*/
+
+
+/*
+	We want to formalize the following protocol:
+
+	A -> B: {'1', x}
+	B -> A: {'2', y}
+	A -> B: {'3', y}_Kab
+	B -> A: {'4', x}_Kab
+*/
+
+// Setup a shared key with two parties
+rule SharedKeySetup:
+  [ Fr(~shk) ]
+--[ KeySetup($A, $B), NotEq($A, $B) ]->
+  [ !SharedKey($A, $B, ~shk) ]
+
+// Initialize Initiator
+rule Init_I:
+  [ Fr(~id), SharedKeySetup(A, B, kAB) ]
+--[ Create_I(A, ~id) ]->
+  [ St_I_1(A, ~id, kAB, B) ]
+
+// Initialize Responder
+rule Init_R:
+  [ Fr(~id), SharedKeySetup(B, A, kAB) ]
+--[ Create_R(B, ~id) ]->
+  [ St_R_1(B, ~id, kAB, B) ]
+
+
+// 1. I send
+rule I_1_send:
+  [ St_I_1(A, ~id, kAB, B), Fr(~x) ]
+--[ Send(A, <'1', ~x>) ]->
+  [ St_I_2(A, ~id, kAB, ~x, B), Out(<'1', ~x>) ]
+
+// 1. R receive
+rule R_1_receive:
+  [ St_R_1(B, ~id, kAB, A), In(<'1', x>) ]
+--[ Recv(B, <'1', x>) ]->
+  [ St_R_2(B, ~id, kAB, x, A) ]
+
+// 2. R send
+rule R_2_send:
+  [ St_R_2(B, ~id, kAB, x, A), Fr(~y) ]
+--[ Send(B, <'2', ~y>) ]->
+  [ St_R_3(B, ~id, kAB, x, ~y, Kab, A), Out(<'2', ~y>) ]
+
+
+// 2. I receive
+rule I_2_receive:
+  [ St_I_2(A, ~id, kAB, x, B), In(<'2', y>) ]
+--[ Recv(A, <'2', y>) ]->
+  [ St_I_3(A, ~id, kAB, x, y, Kab, B) ]
+
+
+// 3. I send
+rule I_3_send:
+  let mac1 = mac(Kab, y)
+  in
+  [ St_I_3(A, ~id, kAB, x, y, Kab, B) ]
+--[ Send(A, <'3', mac1>) ]->
+  [ St_I_4(A, ~id, kAB, x, y, Kab, B), Out(<'3', mac1>) ]
+
+
+// 3. R receive
+rule R_3_receive:
+  let mac1 = mac(Kab, y)
+  in
+  [ St_R_3(B, ~id, kAB, x, y, Kab, A), In(<'3', mac1>) ]
+--[ Recv(B, <'3', mac1>) ]->
+  [ St_R_4(B, ~id, kAB, x, y, Kab, A) ]
+
+// 4. R send
+rule R_4_send:
+  let mac2 = mac(Kab, x)
+  in
+  [ St_R_4(B, ~id, kAB, x, y, Kab, A) ]
+--[ Send(B, <'4', mac2>) ]->
+  [ St_R_5(B, ~id, kAB, x, y, Kab, A), Out(<'4', mac2>) ]
+
+// 4. I receive
+rule I_4_receive:
+  let mac2 = mac(Kab, x)
+  in
+  [ St_I_4(A, ~id, kAB, x, y, Kab, B), In(<'4', mac2>) ]
+--[ Recv(A, <'4', mac2>) ]->
+  [ St_I_5(A, ~id, kAB, x, y, Kab, B) ]
+end
