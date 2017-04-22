@@ -5,26 +5,24 @@ begin
 functions: kdf/3, mac/2
 
 /*
-	We somehow need to define this key function. This below results in an error though.
-	equations:
-  		Kab = kdf(kAB, x, y)
-*/
-
-
-/*
 	We want to formalize the following protocol:
 
 	A -> B: {'1', x}
-	B -> A: {'2', y}
+	B -> A: {'2', <y, x_Kab>}
 	A -> B: {'3', y}_Kab
-	B -> A: {'4', x}_Kab
 */
+
 
 // Setup a shared key with two parties
 rule SharedKeySetup:
   [ Fr(~shk) ]
 --[ KeySetup($A, $B), NotEq($A, $B) ]->
   [ !SharedKey($A, $B, ~shk) ]
+
+rule Reveal:
+  [ !SharedKey(A, B, kAB) ]
+--[ Reveal(A), Reveal(B) ]->
+  [ Out(kAB) ]
 
 // Initialize Initiator
 rule Init_I:
@@ -36,8 +34,7 @@ rule Init_I:
 rule Init_R:
   [ Fr(~id), SharedKeySetup(B, A, kAB) ]
 --[ Create_R(B, ~id) ]->
-  [ St_R_1(B, ~id, kAB, B) ]
-
+  [ St_R_1(B, ~id, kAB, A) ]
 
 // 1. I send
 rule I_1_send:
@@ -53,48 +50,83 @@ rule R_1_receive:
 
 // 2. R send
 rule R_2_send:
+  let mac1 = mac(<x, ~y>, kdf(kAB, x, ~y))
+  in
   [ St_R_2(B, ~id, kAB, x, A), Fr(~y) ]
---[ Send(B, <'2', ~y>) ]->
-  [ St_R_3(B, ~id, kAB, x, ~y, Kab, A), Out(<'2', ~y>) ]
+--[ Send(B, <'2', <~y, mac1>>), Running(B, A, <'I', 'R', <x, ~y, kdf(kAB, x, ~y)>>) ]->
+  [ St_R_3(B, ~id, kAB, x, ~y, A), Out(<'2', <~y, mac1>>) ]
 
 
 // 2. I receive
 rule I_2_receive:
-  [ St_I_2(A, ~id, kAB, x, B), In(<'2', y>) ]
---[ Recv(A, <'2', y>) ]->
-  [ St_I_3(A, ~id, kAB, x, y, Kab, B) ]
+  let mac1 = mac(<x, y>, kdf(kAB, x, y))
+  in
+  [ St_I_2(A, ~id, kAB, x, B), In(<'2', <y, mac1>>) ]
+--[ Recv(A, <'2', <y, mac1>>), Commit(A, B, <'I', 'R', <x, y, kdf(kAB, x, y)>>), Honest(A), Secret(A, kdf(kAB, x, y)), Running(A, B, <'R', 'I', <x, y, kdf(kAB, x, y)>>) ]->
+  [ St_I_3(A, ~id, kAB, x, y, B) ]
 
 
 // 3. I send
 rule I_3_send:
-  let mac1 = mac(Kab, y)
+  let mac2 = mac(y, kdf(kAB, x, y))
   in
-  [ St_I_3(A, ~id, kAB, x, y, Kab, B) ]
---[ Send(A, <'3', mac1>) ]->
-  [ St_I_4(A, ~id, kAB, x, y, Kab, B), Out(<'3', mac1>) ]
+  [ St_I_3(A, ~id, kAB, x, y, B) ]
+--[ Send(A, <'3', mac2>) ]->
+  [ St_I_4(A, ~id, kAB, x, y, B), Out(<'3', mac2>) ]
 
 
 // 3. R receive
 rule R_3_receive:
-  let mac1 = mac(Kab, y)
+  let mac2 = mac(y, kdf(kAB, x, y))
   in
-  [ St_R_3(B, ~id, kAB, x, y, Kab, A), In(<'3', mac1>) ]
---[ Recv(B, <'3', mac1>) ]->
-  [ St_R_4(B, ~id, kAB, x, y, Kab, A) ]
+  [ St_R_3(B, ~id, kAB, x, y, A), In(<'3', mac2>) ]
+--[ Recv(B, <'3', mac2>), Finish(), Commit(B, A, <'R', 'I', <x, y, kdf(kAB, x, y)>>), Honest(B), Secret(B, kdf(kAB, x, y)) ]->
+  [ St_R_4(B, ~id, kAB, x, y, A) ]
 
-// 4. R send
-rule R_4_send:
-  let mac2 = mac(Kab, x)
-  in
-  [ St_R_4(B, ~id, kAB, x, y, Kab, A) ]
---[ Send(B, <'4', mac2>) ]->
-  [ St_R_5(B, ~id, kAB, x, y, Kab, A), Out(<'4', mac2>) ]
 
-// 4. I receive
-rule I_4_receive:
-  let mac2 = mac(Kab, x)
-  in
-  [ St_I_4(A, ~id, kAB, x, y, Kab, B), In(<'4', mac2>) ]
---[ Recv(A, <'4', mac2>) ]->
-  [ St_I_5(A, ~id, kAB, x, y, Kab, B) ]
+
+
+lemma executable:
+  exists-trace
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
 end

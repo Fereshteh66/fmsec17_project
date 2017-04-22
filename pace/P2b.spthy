@@ -55,7 +55,7 @@ rule R_1_receive:
 
 // 2. R send
 rule R_2_send:
-  let mac1 = mac(<~y, x>, kAB)
+  let mac1 = mac(<x, ~y>, kAB)
   in
   [ St_R_2(B, ~id, kAB, kBA, x, A), Fr(~y) ]
 --[ Send(B, <'2', mac1>), Running(B, A, <'I', 'R', <x, ~y>>) ]->
@@ -63,7 +63,7 @@ rule R_2_send:
 
 // 2. I recieve
 rule I_2_receive:
-  let mac1 = mac(<y, x>, kAB)
+  let mac1 = mac(<x, y>, kAB)
   in
   [ St_I_2(A, ~id, kAB, kBA, x, B), In(<'2', mac1>) ]
 --[ Recv(A, <'2', mac1>), Commit(A, B, <'I', 'R', <x, y>>), Honest(A), Running(A, B, <'R', 'I', <x, y>>) ]->

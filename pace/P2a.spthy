@@ -63,7 +63,7 @@ rule R_2_send:
 // 2. I receive
 rule I_2_receive:
   [ St_I_2(A, ~id, kAB, kBA, x, B), In(<'2', y>) ]
---[ Recv(A, <'2', y>), Running(A, B, <'R', 'I', <x, y>>) ]->
+--[ Recv(A, <'2', y>) ]->
   [ St_I_3(A, ~id, kAB, kBA, x, y, B) ]
 
 // 3. I send
