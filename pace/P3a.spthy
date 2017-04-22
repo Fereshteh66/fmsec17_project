@@ -26,13 +26,13 @@ rule Reveal:
 
 // Initialize Initiator
 rule Init_I:
-  [ Fr(~id), SharedKeySetup(A, B, kAB) ]
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
 --[ Create_I(A, ~id) ]->
   [ St_I_1(A, ~id, kAB, B) ]
 
 // Initialize Responder
 rule Init_R:
-  [ Fr(~id), SharedKeySetup(B, A, kAB) ]
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
 --[ Create_R(B, ~id) ]->
   [ St_R_1(B, ~id, kAB, A) ]
 
