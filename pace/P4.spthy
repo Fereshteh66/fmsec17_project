@@ -1,0 +1,126 @@
+theory P4
+begin
+
+
+builtins: symmetric-encryption, hashing
+functions: kdf/3, mac/2
+
+
+// Setup a shared key with two parties
+rule SharedKeySetup:
+  [ Fr(~shk) ]
+--[ KeySetup($A, $B), NotEq($A, $B) ]->
+  [ !SharedKey($A, $B, ~shk) ]
+
+
+rule Reveal:
+  [ !SharedKey(A, B, kAB) ]
+--[ Reveal(A), Reveal(B) ]->
+  [ Out(kAB) ]
+
+// Initialize Initiator
+rule Init_I:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create_I(A, ~id) ]->
+  [ St_I_1(A, ~id, kAB, B) ]
+
+// Initialize Responder
+rule Init_R:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create_R(B, ~id) ]->
+  [ St_R_1(B, ~id, kAB, A) ]
+
+
+// 1. I send
+rule I_1_send:
+  [ St_I_1(A, ~id, kAB, B), Fr(~x), Fr(~s) ]
+--[ Send(A, <'1', <~x, senc{~s}h(kAB)>>) ]->
+  [ St_I_2(A, ~id, kAB, ~x, ~s, B), Out(<'1', <~x, senc{~s}h(kAB)>>) ]
+
+// 1. R receive
+rule R_1_receive:
+  [ St_R_1(B, ~id, kAB, A), In(<'1', <x, senc{s}h(kAB)>>) ]
+--[ Recv(B, <'1', x>) ]->
+  [ St_R_2(B, ~id, kAB, x, s, A) ]
+
+// 2. R send
+rule R_2_send:
+  let mac1 = mac(<x, ~y>, kdf(s, x, ~y))
+  in
+  [ St_R_2(B, ~id, kAB, x, s, A), Fr(~y) ]
+--[ Send(B, <'2', <~y, mac1>>), Running(B, A, <'I', 'R', <x, ~y, kdf(s, x, ~y)>>) ]->
+  [ St_R_3(B, ~id, kAB, x, s, ~y, A), Out(<'2', <~y, mac1>>) ]
+
+
+// 2. I receive
+rule I_2_receive:
+  let mac1 = mac(<x, y>, kdf(s, x, y))
+  in
+  [ St_I_2(A, ~id, kAB, x, s, B), In(<'2', <y, mac1>>) ]
+--[ Recv(A, <'2', <y, mac1>>), Commit(A, B, <'I', 'R', <x, y, kdf(s, x, y)>>), Honest(A), Secret(A, kdf(s, x, y)), Running(A, B, <'R', 'I', <x, y, kdf(s, x, y)>>) ]->
+  [ St_I_3(A, ~id, kAB, x, s, y, B) ]
+
+
+// 3. I send
+rule I_3_send:
+  let mac2 = mac(y, kdf(s, x, y))
+  in
+  [ St_I_3(A, ~id, kAB, x, s, y, B) ]
+--[ Send(A, <'3', mac2>) ]->
+  [ St_I_4(A, ~id, kAB, x, s, y, B), Out(<'3', mac2>) ]
+
+
+// 3. R receive
+rule R_3_receive:
+  let mac2 = mac(y, kdf(s, x, y))
+  in
+  [ St_R_3(B, ~id, kAB, x, s, y, A), In(<'3', mac2>) ]
+--[ Recv(B, <'3', mac2>), Finish(), Commit(B, A, <'R', 'I', <x, y, kdf(s, x, y)>>), Honest(B), Secret(B, kdf(s, x, y)) ]->
+  [ St_R_4(B, ~id, kAB, x, s, y, A) ]
+
+
+
+lemma executable:
+  exists-trace
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+end
