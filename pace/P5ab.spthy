@@ -1,0 +1,52 @@
+theory P5ab
+begin
+
+builtins: symmetric-encryption, hashing, diffie-hellman
+functions: kdf/3, mac/2, map/2
+
+// Setup a shared key with two parties
+rule SharedKeySetup:
+  [ Fr(~shk) ]
+--[ KeySetup($A, $B), NotEq($A, $B) ]->
+  [ !SharedKey($A, $B, ~shk) ]
+
+rule Reveal:
+  [ !SharedKey(A, B, kAB) ]
+--[ Reveal(A), Reveal(B) ]->
+  [ Out(kAB) ]
+
+// Initialize Initiator
+rule Init_I:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create_I(A, ~id) ]->
+  [ St_I_1(A, ~id, kAB, B) ]
+
+// Initialize Responder
+rule Init_R:
+  [ Fr(~id), !SharedKey(A, B, kAB) ]
+--[ Create_R(B, ~id) ]->
+  [ St_R_1(B, ~id, kAB, A) ]
+
+
+// 1. I send
+rule I_1_send:
+  let g = map(~s, ~p)
+  in
+  [ St_I_1(A, ~id, kAB, B), Fr(~s), Fr(~x), Fr(~p) ]
+--[ Send(A, <'1', <~p, g ^ ~x>>) ]->
+  [ St_I_2(A, ~id, kAB, ~s, ~x, ~p, B), Out(<'1', <~p, senc{~s}h(kAB), g ^ ~x>>) ]
+
+// 1. R receive
+rule R_1_receive:
+  [ St_R_1(B, ~id, kAB, A), In(<'1', <p, senc{s}h(kAB), X>>) ]
+--[ Recv(B, <'1', <p, senc{s}h(kAB), X>>) ]->
+  [ St_R_2(B, ~id, kAB, s, X, p, A) ]
+
+
+// 2. R send
+rule R_2_send:
+  let g = map(s, p), mac1 = mac(<g ^ ~y, h((g ^ ~y) ^ X)>)
+  in
+  [ St_R_2(B, ~id, kAB, s, X, p, A), Fr(~y) ]
+--[ Send(B, <'2', <X>>)]
+end
