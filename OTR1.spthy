@@ -1,0 +1,140 @@
+theory OTR1
+begin
+
+
+/*
+  We want to formalize the following protocol
+	
+    1. A -> B: {g^x}sk(A), pk(A)
+    2. B -> A: {g^y}sk(B), pk(B)
+*/
+
+builtins: 
+  diffie-hellman, signing, asymmetric-encryption
+
+
+
+// Public key infrastructure
+
+rule Register:
+    [ Fr(~sk) ] 
+  --[ Unique($A) ]-> 
+    [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
+  
+rule Reveal:
+    [ !Ltk(A, ltk) ]
+  --[ Rev(A) ]->
+    [ Out(ltk) ]
+
+
+// Initialize A
+rule Init_A:
+[ Fr(~id)
+    , !Ltk(A, skA)
+    , !Pk(B, pkB)  
+    ]
+  --[ Create(A, ~id, 'roleA') 
+    ]->
+    [ St_A_1(A, ~id, B, skA, pkB) 
+    ]
+
+
+// Initialize B
+rule Init_B:
+[ Fr(~id)
+    , !Ltk(B, skB)
+    , !Pk(A, pkA) 
+    ]
+  --[ Create(B, ~id, 'roleB') 
+    ]->
+    [ St_B_1(B, ~id, A, skB, pkA) 
+    ]
+
+// 1. A send
+rule A_1_send:
+let m= <sign ('g' ^ ~x, skA), pk(skA)>
+in
+ [ St_A_1(A, id, B, skA, pkB)
+    , Fr(~x)
+    ] 
+  --[ Send(A, m)
+    ]->
+    [ St_A_2(A, id, B, skA, pkB, ~x)
+    , Out( m ) 
+    ]
+
+// 1. B receive
+rule B_1_Recv:
+let m= <sign (X, skA), pkA>
+in
+    [ St_B_1(B, id, A, skB, pkA)
+    , In( m ) 
+    ]
+  --[ Recv(B, m)
+    ]->
+    [ St_B_2(B, id, A, skB, pkA, X )
+    ]
+
+// 2. B send
+rule B_2_Send:
+let m=<sign ('g' ^ ~y, skB), pk(skB)>
+in
+    [ St_B_2(B, id, A, skB, pkA, X)
+    , Fr(~y)
+    ]
+  --[ Send(B, m) 
+    , Claim_secret(B, X ^ ~y)
+    , Honest(B), Honest(A)
+    ]->
+    [ St_B_3(B, id, A, skB, pkA, X, ~y)
+    , Out( m )
+    ]
+
+// 2. A receive
+rule A_2_Recv:
+let m=<sign (Y, skA), pkB>
+in
+    [ St_A_2(A, id, B, skA, pkB, x)
+    , In( m )
+    ]
+  --[ Recv(A, m)
+    , Claim_secret(A, Y ^ x) 
+    , Honest(A), Honest(B) 
+    ]->
+    [ St_A_3(A, id, B, skA, pkB, Y)
+    ]
+
+// Restricions
+restriction Uniqueness:
+  " All X #i #j. Unique(X)@i & Unique(X)@j ==> #i=#j "
+
+
+// Security properties
+
+lemma Key_Secrecy:
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i)
+     )
+  "
+
+lemma Key_Forward_Secrecy: 
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
+     )
+  "
+
+lemma Executability:
+  exists-trace
+    "Ex A B Kab #i #j. 
+       Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
+       not (Ex B #k. Rev(B)@k)"
+
+
+end
+
