@@ -1,0 +1,102 @@
+theory OTR2
+begin
+
+
+
+/*
+  We want to formalize the following protocol
+	
+    1. A -> B: {g^x}sk(A), pk(A)
+    2. B -> A: {g^y}sk(B), pk(B)
+*/
+
+builtins: 
+  diffie-hellman, signing
+
+
+
+// Public key infrastructure
+
+rule Register:
+ [ Fr(~sk) ]  -->  [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+ [ !Ltk(A, ltk) ]  --[ Rev(A) ]->   [ Out(ltk) ]
+
+
+// Initialize A
+rule Init_A:
+ [ Fr(~id) , !Ltk($A, skA)  , !Pk($B, pkB) ]
+ --[ Create($A, ~id, 'roleA') ]->
+ [ St_A_1($A, ~id, $B, skA, pkB) ]
+
+
+// Initialize B
+rule Init_B:
+ [ Fr(~id) , !Ltk($B, skB) , !Pk($A, pkA) ]
+ --[ Create($B, ~id, 'roleB') ]->
+ [ St_B_1($B, ~id, $A, skB, pkA) ]
+
+
+// 1. A send
+rule A_1_Send:
+
+ [ St_A_1($A, id, $B, skA, pkB) , Fr(~x) ] 
+ --[ Send($A, <sign{'1', 'g' ^ ~x}skA, pk(skA)> )]->
+ [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( <sign{'1', 'g' ^ ~x}skA, pk(skA)> ) ]
+
+
+// 1. B receive
+rule B_1_Recv:
+
+ [ St_B_1($B, id, $A, skB, pk(skA)), In( <sign{'1', X}skA, pkA> ) ]
+ --[ Recv($A, <sign{'1', X}skA, pkA>) ]->
+ [ St_B_2($B, id, $A, skB, pk(skA), X) ]
+
+
+// 2. B send
+rule B_2_Send:
+
+ [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
+ --[ Send($B, <sign{'2', 'g' ^ ~y}skB, pk(skB)>) , Claim_secret($B, X ^ ~y), Honest($B),   Honest($A) ]->
+ [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( <sign{'2', 'g' ^ ~y}skB, pk(skB)> ) ]
+
+
+// 2. A receive
+rule A_2_Recv:
+
+ [ St_A_2($A, id, $B, skA, pk(skB), x) , In( <sign{'2', Y}skB, pkB> ) ]
+ --[ Recv($A, <sign{'2', Y}skB, pkB>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
+ [ St_A_3($A, id, $B, skA, pk(skB), x)]
+
+
+
+
+
+// Security properties
+
+lemma Key_Secrecy:
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i)
+     )
+  "
+
+lemma Key_Forward_Secrecy: 
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
+     )
+  "
+
+lemma Executability:
+  exists-trace
+    "Ex A B Kab #i #j. 
+       Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
+       not (Ex B #k. Rev(B)@k)"
+
+end
