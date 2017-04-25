@@ -1,4 +1,4 @@
-theory OTR2
+theory OTR1_2
 begin
 
 
@@ -41,32 +41,42 @@ rule Init_B:
 // 1. A send
 rule A_1_Send:
 
+ let M = <sign{'1', 'g' ^ ~x}skA, pk(skA)>
+ in
+
  [ St_A_1($A, id, $B, skA, pkB) , Fr(~x) ] 
- --[ Send($A, <sign{'1', 'g' ^ ~x}skA, pk(skA)> )]->
- [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( <sign{'1', 'g' ^ ~x}skA, pk(skA)> ) ]
+ --[ Send( $A, M )]->
+ [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( M ) ]
 
 
 // 1. B receive
 rule B_1_Recv:
 
- [ St_B_1($B, id, $A, skB, pk(skA)), In( <sign{'1', X}skA, pkA> ) ]
- --[ Recv($A, <sign{'1', X}skA, pkA>) ]->
+ let M = <sign{'1', X}skA, pkA>
+ in
+
+ [ St_B_1($B, id, $A, skB, pk(skA)), In( M ) ]
+ --[ Recv( $A, M ) ]->
  [ St_B_2($B, id, $A, skB, pk(skA), X) ]
 
 
 // 2. B send
 rule B_2_Send:
 
+ let M = <sign{'2','g' ^ ~y}skB, pk(skB)>
+ in
  [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
- --[ Send($B, <sign{'2', 'g' ^ ~y}skB, pk(skB)>) , Claim_secret($B, X ^ ~y), Honest($B),   Honest($A) ]->
- [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( <sign{'2', 'g' ^ ~y}skB, pk(skB)> ) ]
+ --[ Send($B, M ) , Claim_secret($B, X ^ ~y), Honest($B),   Honest($A) ]->
+ [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( M ) ]
 
 
 // 2. A receive
 rule A_2_Recv:
 
- [ St_A_2($A, id, $B, skA, pk(skB), x) , In( <sign{'2', Y}skB, pkB> ) ]
- --[ Recv($A, <sign{'2', Y}skB, pkB>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
+ let M = <sign{'2',Y}skB, pkB>
+ in
+ [ St_A_2($A, id, $B, skA, pk(skB), x) , In( M ) ]
+ --[ Recv( $A, M ), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
  [ St_A_3($A, id, $B, skA, pk(skB), x)]
 
 
