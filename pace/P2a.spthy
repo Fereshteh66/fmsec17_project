@@ -108,7 +108,9 @@ rule I_4_receive:
 
 lemma executable:
   exists-trace
-    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)
+    & (All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
+    & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
 
 
 lemma noninjectiveagreementINITIATOR:
@@ -148,15 +150,6 @@ lemma injectiveagreementRESPONDER:
 **/
 restriction noselfkey:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
-
-
-/* I'm not sure if we can do that, because of a too tight restriction. (refering to discussion of the exercise session) */
-restriction noselfcommunication:
-  "(All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
-   & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
-
-restriction onlyonekeysetup:
-  " All X Y #i #j. KeySetup(X, Y)@i & KeySetup(X, Y)@j ==> #i = #j"
 
 
 end

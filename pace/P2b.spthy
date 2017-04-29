@@ -10,8 +10,9 @@ functions: mac/2
 	We want to formalize the following protocol
 	protocol {
     1. A -> B: {'1', x}
-    2. B -> A: {'2', <y, x>}_k(A,B)
-    3. A -> B: {'3', y}_k(B,A)
+    2. B -> A: {'2', y}
+    3. A -> B: {'3', <x, y>}_k(B,A)
+    4. B -> A: {'4', <x, y>}_k(A,B)
 	}
 */
 
@@ -55,36 +56,49 @@ rule R_1_receive:
 
 // 2. R send
 rule R_2_send:
-  let mac1 = mac(<x, ~y>, kAB)
-  in
   [ St_R_2(B, ~id, kAB, kBA, x, A), Fr(~y) ]
---[ Send(B, <'2', mac1>), Running(B, A, <'I', 'R', <x, ~y>>) ]->
-  [ St_R_3(B, ~id, kAB, kBA, x, ~y, A), Out(<'2', mac1>) ]
+--[ Send(B, <'2', ~y>) ]->
+  [ St_R_3(B, ~id, kAB, kBA, x, ~y, A), Out(<'2', ~y>) ]
 
 // 2. I recieve
 rule I_2_receive:
-  let mac1 = mac(<x, y>, kAB)
-  in
-  [ St_I_2(A, ~id, kAB, kBA, x, B), In(<'2', mac1>) ]
---[ Recv(A, <'2', mac1>), Commit(A, B, <'I', 'R', <x, y>>), Honest(A), Running(A, B, <'R', 'I', <x, y>>) ]->
+  [ St_I_2(A, ~id, kAB, kBA, x, B), In(<'2', y>) ]
+--[ Recv(A, <'2', y>) ]->
   [ St_I_3(A, ~id, kAB, kBA, x, y, B) ]
 
 // 3. I send
 rule I_3_send:
-  let mac2 = mac(y, kBA)
+  let mac1 = mac(<x, y>, kBA)
   in
   [ St_I_3(A, ~id, kAB, kBA, x, y, B) ]
---[ Send(A, <'3', mac2>) ]->
-  [ St_I_4(A, ~id, kAB, kBA, x, y, B), Out(<'3', mac2>) ]
+--[ Send(A, <'3', mac1>), Running(A, B, <'R', 'I', <x, y>>) ]->
+  [ St_I_4(A, ~id, kAB, kBA, x, y, B), Out(<'3', mac1>) ]
 
 // 3. R receive
 rule R_3_receive:
-  let mac2 = mac(y, kBA)
+  let mac1 = mac(<x, y>, kBA)
   in
-  [ St_R_3(B, ~id, kAB, kBA, x, y, A), In(<'3', mac2>) ]
---[ Recv(B, <'3', mac2>), Finish(), Commit(B, A, <'R', 'I', <x, y>>), Honest(B) ]->
+  [ St_R_3(B, ~id, kAB, kBA, x, y, A), In(<'3', mac1>) ]
+--[ Recv(B, <'3', mac1>), Running(B, A, <'I', 'R', <x, y>>), Commit(B, A, <'R', 'I', <x, y>>), Honest(B) ]->
   [ St_R_4(B, ~id, kAB, kBA, x, y, A) ]
 
+
+// 4. R send
+rule R_4_send:
+  let mac2 = mac(<x, y>, kAB)
+  in
+  [ St_R_4(B, ~id, kAB, kBA, x, y, A) ]
+--[ Send(B, <'4', mac2>) ]->
+  [ St_R_5(B, ~id, kAB, kBA, x, y, A), Out(<'4', mac2>) ]
+
+
+// 4. I receive
+rule I_4_receive:
+  let mac2 = mac(<x, y>, kAB)
+  in
+  [ St_I_4(A, ~id, kAB, kBA, x, y, B), In(<'4', mac2>) ]
+--[ Recv(A, <'4', mac2>), Finish(), Commit(A, B, <'I', 'R', <x, y>>), Honest(A) ]->
+  [ St_I_5(A, ~id, kAB, kBA, x, y, B) ]
 
 
 
@@ -98,7 +112,9 @@ rule R_3_receive:
 
 lemma executable:
   exists-trace
-    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)
+    & (All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
+    & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
 
 
 lemma noninjectiveagreementINITIATOR:
@@ -138,15 +154,5 @@ lemma injectiveagreementRESPONDER:
 **/
 restriction noselfkey:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
-
-
-/* I'm not sure if we can do that, because of a too tight restriction. (refering to discussion of the exercise session) */
-restriction noselfcommunication:
-  "(All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
-   & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
-
-restriction onlyonekeysetup:
-  " All X Y #i #j. KeySetup(X, Y)@i & KeySetup(X, Y)@j ==> #i = #j"
-
 
 end
