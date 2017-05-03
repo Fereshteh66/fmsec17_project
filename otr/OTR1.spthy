@@ -1,140 +1,158 @@
+/*
+Protocoll OTR1 implemented by Floyd
+
+*/
+
+/* Given the PKI (sk_A, pk_A) for signing we want to formalize the following protocol:
+    A  -> B : <1, aenc('g'^x, skA), pk(skA)>
+    A <-  B : <2, aenc('g'^y, skB), pk(skB)>
+*/
+
 theory OTR1
 begin
 
+builtins: asymmetric-encryption, diffie-hellman
 
-/*
-  We want to formalize the following protocol
-	
-    1. A -> B: {g^x}sk(A), pk(A)
-    2. B -> A: {g^y}sk(B), pk(B)
-*/
+// Setup
 
-builtins: 
-  diffie-hellman, signing, asymmetric-encryption
+rule Init_PKI:
+  [ Fr(~newKey) ]
+-->
+  [ !SecretKey($A, ~newKey)
+  , !PublicKey($A, pk(~newKey))
+  , Out(pk(~newKey))
+  ]
 
+rule Reveal_SK:
+  [ !SecretKey(A, skA) ]
+--[ Reveal(A) ]->
+  [ Out(skA) ]
 
+// Init
+// While the PKI is constant any agent may start any number of threads. 
+// A thread is bound to an id, a owned private key, a partnered agent and its public key.
 
-// Public key infrastructure
+rule Init_R:
+  [ !SecretKey(A, skA)
+  , !PublicKey(B, pkB)
+  , Fr(~id)
+  ]
+--[ Create(A, ~id, 'R')
+  , Executable_NEQ(A,B)
+  ]->
+  [ St_R_0(A, ~id, skA, B, pkB) ]
 
-rule Register:
-    [ Fr(~sk) ] 
-  --[ Unique($A) ]-> 
-    [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
-  
-rule Reveal:
-    [ !Ltk(A, ltk) ]
-  --[ Rev(A) ]->
-    [ Out(ltk) ]
+rule Init_S:
+  [ !SecretKey(B, skB)
+  , !PublicKey(A, pkA)
+  , Fr(~id)
+  ]
+--[ Create(B, ~id, 'S')
+  , Executable_NEQ(A,B)
+  ]->
+  [ St_S_0(B, ~id, skB, A, pkA) ]
 
+// Protocol
 
-// Initialize A
-rule Init_A:
-[ Fr(~id)
-    , !Ltk(A, skA)
-    , !Pk(B, pkB)  
-    ]
-  --[ Create(A, ~id, 'roleA') 
-    ]->
-    [ St_A_1(A, ~id, B, skA, pkB) 
-    ]
+// A  -> B : <1, aenc('g'^x, skA), pk(skA)>
+rule R_1_sendDhX:
+  let dhX = 'g'^~x
+      pkA = pk(skA)
+      m = <'1', aenc(dhX, skA), pkA>
+  in
+  [ St_R_0(A, id, skA, B, pkB)
+  , Fr(~x)
+  ]
+--[ Send(A, m)
+  , Running(A, B, <'R', 'S', dhX>)
+  ]->
+  [ St_R_1(A, id, skA, B, pkB, ~x)
+  , Out(m)
+  ]
 
+rule S_1_recvDhValue:
+  let pkA = pk(skA)
+      m = <'1', aenc(dhX, skA), pkA>
+  in
+  [ St_S_0(B, id, skB, A, pkA)
+  , In(m)
+  ]
+--[ Recv(B, m)
+  , Commit(B, A, <'R', 'S', dhX>), Honest(A), Honest(B)
+  ]->
+  [ St_S_1(B, id, skB, A, pkA, dhX) ]
 
-// Initialize B
-rule Init_B:
-[ Fr(~id)
-    , !Ltk(B, skB)
-    , !Pk(A, pkA) 
-    ]
-  --[ Create(B, ~id, 'roleB') 
-    ]->
-    [ St_B_1(B, ~id, A, skB, pkA) 
-    ]
+// A <-  B : <2, aenc('g'^y, skB), pk(skB)>
+rule S_2_sendDhValue:
+  let dhY = 'g'^~y
+      pkB = pk(skB)
+      m = <'2', aenc(dhY, skB), pkB>
+      sessionKey = dhX^~y
+  in
+  [ St_S_1(B, id, skB, A, pkA, dhX)
+  , Fr(~y)
+  ]
+--[ Send(B, m)
+  , Secret(B, sessionKey), Running(B, A, <'S', 'R', sessionKey>), Honest(A), Honest(B)
+  ]->
+  [ St_R_2(B, id, skB, A, pkA, sessionKey)
+  , Out(m)
+  ]
 
-// 1. A send
-rule A_1_send:
-let m= <sign ('g' ^ ~x, skA), pk(skA)>
-in
- [ St_A_1(A, id, B, skA, pkB)
-    , Fr(~x)
-    ] 
-  --[ Send(A, m)
-    ]->
-    [ St_A_2(A, id, B, skA, pkB, ~x)
-    , Out( m ) 
-    ]
-
-// 1. B receive
-rule B_1_Recv:
-let m= <sign (X, skA), pkA>
-in
-    [ St_B_1(B, id, A, skB, pkA)
-    , In( m ) 
-    ]
-  --[ Recv(B, m)
-    ]->
-    [ St_B_2(B, id, A, skB, pkA, X )
-    ]
-
-// 2. B send
-rule B_2_Send:
-let m=<sign ('g' ^ ~y, skB), pk(skB)>
-in
-    [ St_B_2(B, id, A, skB, pkA, X)
-    , Fr(~y)
-    ]
-  --[ Send(B, m) 
-    , Claim_secret(B, X ^ ~y)
-    , Honest(B), Honest(A)
-    ]->
-    [ St_B_3(B, id, A, skB, pkA, X, ~y)
-    , Out( m )
-    ]
-
-// 2. A receive
-rule A_2_Recv:
-let m=<sign (Y, skA), pkB>
-in
-    [ St_A_2(A, id, B, skA, pkB, x)
-    , In( m )
-    ]
-  --[ Recv(A, m)
-    , Claim_secret(A, Y ^ x) 
-    , Honest(A), Honest(B) 
-    ]->
-    [ St_A_3(A, id, B, skA, pkB, Y)
-    ]
-
-// Restricions
-restriction Uniqueness:
-  " All X #i #j. Unique(X)@i & Unique(X)@j ==> #i=#j "
+rule R_2_recvDhValue:
+  let pkB = pk(skB)
+      m = <'2', aenc(dhY, skB), pkB>
+      sessionKey = dhY^x
+  in
+  [ St_R_1(A, id, skA, B, pkB, x)
+  , In(m) 
+  ]
+--[ Recv(A, m)
+  , Secret(A, sessionKey), Commit(A, B, <'S', 'R', sessionKey>), Honest(A), Honest(B)
+  ]->
+  [ St_S_2(A, id, skA, sessionKey) ]
 
 
-// Security properties
+// Lemmas
 
-lemma Key_Secrecy:
-  "All A Kab #i. 
-     Claim_secret(A, Kab)@i 
-     ==>
-     ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i)
-     )
-  "
+lemma executable: exists-trace
+  " (Ex A B K #i #j. Running(A, B, <'S', 'R', K>)@i & Commit(B, A, <'S', 'R', K>)@j) & not(Ex A #i. Reveal(A)@i) & not(Ex A #i. Executable_NEQ(A,A)@i) "
 
-lemma Key_Forward_Secrecy: 
-  "All A Kab #i. 
-     Claim_secret(A, Kab)@i 
-     ==>
-     ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
-     )
-  "
+lemma secrecy:
+  " All A x #i.
+    Secret(A,x) @i ==> not (Ex #j. K(x)@j)
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
 
-lemma Executability:
-  exists-trace
-    "Ex A B Kab #i #j. 
-       Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
-       not (Ex B #k. Rev(B)@k)"
+lemma secrecy_PFS:
+  " All A x #i.
+    Secret(A,x) @i ==> not (Ex #j. K(x)@j)
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i) "
+
+lemma noninjectiveagreementR:
+  " All a b t #i.
+    Commit(a,b,<'R', 'S', t>) @i ==> (Ex #j. Running(b,a,<'R', 'S', t>) @j)
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+
+lemma injectiveagreementR:
+  " All a b t #i.
+    Commit(a,b,<'R', 'S', t>) @i ==> (Ex #j. Running(b,a,<'R', 'S', t>) @j
+      & j < i
+      & not (Ex a2 b2 #i2. Commit(a2,b2,<'R', 'S', t>) @i2
+      & not (#i2 = #i)))
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+
+lemma noninjectiveagreementS:
+  " All a b t #i.
+    Commit(a,b,<'S', 'R', t>) @i ==> (Ex #j. Running(b,a,<'S', 'R', t>) @j)
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+
+lemma injectiveagreementS:
+  " All a b t #i.
+    Commit(a,b,<'S', 'R', t>) @i ==> (Ex #j. Running(b,a,<'S', 'R', t>) @j
+      & j < i
+      & not (Ex a2 b2 #i2. Commit(a2,b2,<'S', 'R', t>) @i2
+      & not (#i2 = #i)))
+      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
 
 
 end
-
