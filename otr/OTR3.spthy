@@ -1,0 +1,128 @@
+theory OTR3
+begin
+
+
+
+/*
+  We want to formalize the following protocol
+	
+    1. A -> B: (g^x), {g^x, B}sk(A), pk(A)
+    2. B -> A: (g^y), {g^y, A}sk(B), pk(B)
+*/
+
+builtins: 
+  diffie-hellman, signing
+
+
+
+// Public key infrastructure
+
+rule Register:
+ [ Fr(~sk) ]  -->  [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+ [ !Ltk(A, ltk) ]  --[ Rev(A) ]->   [ Out(ltk) ]
+
+
+// Initialize A
+rule Init_A:
+ [ Fr(~id) , !Ltk($A, skA)  , !Pk($B, pkB) ]
+ --[ Create($A, ~id, 'I') ]->
+ [ St_A_1($A, ~id, $B, skA, pkB) ]
+
+
+// Initialize B
+rule Init_B:
+ [ Fr(~id) , !Ltk($B, skB) , !Pk($A, pkA) ]
+ --[ Create($B, ~id, 'R') ]->
+ [ St_B_1($B, ~id, $A, skB, pkA) ]
+
+
+// 1. A send
+rule A_1_Send:
+
+ let M = <'g' ^ ~x, sign{'1', $B, 'g' ^ ~x}skA, pk(skA)>
+ in
+
+ [ St_A_1($A, id, $B, skA, pkB) , Fr(~x) ] 
+ --[ Send( $A, M )]->
+ [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( M ) ]
+
+
+// 1. B receive
+rule B_1_Recv:
+
+ let M = <X, sign{'1', $B, X}skA, pkA>
+ in
+
+ [ St_B_1($B, id, $A, skB, pk(skA)), In( M ) ]
+ --[ Recv( $A, M ) ]->
+ [ St_B_2($B, id, $A, skB, pk(skA), X) ]
+
+
+// 2. B send
+rule B_2_Send:
+
+ let M = <'g' ^ ~y, sign{'2', $A, 'g' ^ ~y}skB, pk(skB)>
+ in
+ [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
+ --[ Send($B, M ) , Running($B, $A, <'R', 'I', sign{'1', $B, X}skA>), Claim_secret($B, X ^ ~y), Honest($B), Honest($A) ]->
+ [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( M ) ]
+
+
+// 2. A receive
+rule A_2_Recv:
+
+ let M = <Y, sign{'2', $A, Y}skB, pkB>
+ in
+ [ St_A_2($A, id, $B, skA, pk(skB), x) , In( M ) ]
+ --[ Recv( $A, M ), Commit($A, $B, <'I', 'R', sign{'1', $B, 'g' ^ x}skA>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
+ [ St_A_3($A, id, $B, skA, pk(skB), x)]
+
+
+
+
+
+// Security properties
+
+lemma Key_Secrecy:
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i)
+     )
+  "
+
+lemma Key_Forward_Secrecy: 
+  "All A Kab #i. 
+     Claim_secret(A, Kab)@i 
+     ==>
+     ( not (Ex #k. K(Kab)@k)     
+     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
+     )
+  "
+
+lemma Executability:
+  exists-trace
+    "Ex A B Kab #i #j. 
+       Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
+       not (Ex B #k. Rev(B)@k)"
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Rev(X)@r & Honest(X) @i)"
+
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Rev(X)@r & Honest(X) @i)"
+
+end
