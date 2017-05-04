@@ -18,24 +18,26 @@ builtins:
 // Public key infrastructure
 
 rule Register:
- [ Fr(~sk) ]  -->  [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
+ [ Fr(~sk) ]  
+ --[ KeySetup($A) ]->  
+ [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
 
 rule Reveal:
- [ !Ltk(A, ltk) ]  --[ Rev(A) ]->   [ Out(ltk) ]
+ [ !Ltk(A, ltk) ]  --[ Reveal(A) ]->   [ Out(ltk) ]
 
 
 // Initialize A
-rule Init_A:
+rule Init_I:
  [ Fr(~id) , !Ltk($A, skA)  , !Pk($B, pkB) ]
- --[ Create($A, ~id, 'roleA') ]->
+ --[ Create_I($A, ~id) ]->
  [ St_A_1($A, ~id, $B, skA, pkB) ]
 
 
 // Initialize B
-rule Init_B:
- [ Fr(~id) , !Ltk($B, skB) , !Pk($A, pkA) ]
- --[ Create($B, ~id, 'roleB') ]->
- [ St_B_1($B, ~id, $A, skB, pkA) ]
+rule Init_R:
+ [ Fr(~id) , !Ltk(B, skB) , !Pk(A, pkA) ]
+ --[ Create_R(B, ~id) ]->
+ [ St_B_1(B, ~id, A, skB, pkA) ]
 
 
 // 1. A send
@@ -44,9 +46,9 @@ rule A_1_Send:
  let M = <sign{'1', 'g' ^ ~x}skA, pk(skA)>
  in
 
- [ St_A_1($A, id, $B, skA, pkB) , Fr(~x) ] 
- --[ Send( $A, M )]->
- [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( M ) ]
+ [ St_A_1(A, id, B, skA, pkB) , Fr(~x) ] 
+ --[ Send(A, M )]->
+ [ St_A_2(A, id, B, skA, pkB, ~x) , Out( M ) ]
 
 
 // 1. B receive
@@ -55,9 +57,9 @@ rule B_1_Recv:
  let M = <sign{'1', X}skA, pkA>
  in
 
- [ St_B_1($B, id, $A, skB, pk(skA)), In( M ) ]
- --[ Recv( $A, M ) ]->
- [ St_B_2($B, id, $A, skB, pk(skA), X) ]
+ [ St_B_1(B, id, A, skB, pk(skA)), In( M ) ]
+ --[ Recv( A, M ) ]->
+ [ St_B_2(B, id, A, skB, pk(skA), X) ]
 
 
 // 2. B send
@@ -65,9 +67,9 @@ rule B_2_Send:
 
  let M = <sign{'2','g' ^ ~y}skB, pk(skB)>
  in
- [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
- --[ Send($B, M ) , Claim_secret($B, X ^ ~y), Honest($B),   Honest($A) ]->
- [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( M ) ]
+ [ St_B_2(B, id, A, skB, pk(skA), X) , Fr(~y) ]
+ --[ Send(B, M ) , Secret(B, X ^ ~y), Honest(B), Honest(A) ]->
+ [ St_B_3(B, id, A, skB, pk(skA), X, ~y) , Out( M ) ]
 
 
 // 2. A receive
@@ -75,9 +77,9 @@ rule A_2_Recv:
 
  let M = <sign{'2',Y}skB, pkB>
  in
- [ St_A_2($A, id, $B, skA, pk(skB), x) , In( M ) ]
- --[ Recv( $A, M ), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
- [ St_A_3($A, id, $B, skA, pk(skB), x)]
+ [ St_A_2(A, id, B, skA, pk(skB), x) , In( M ) ]
+ --[ Recv( A, M ), Finish(), Secret(A, Y ^ x) , Honest(A), Honest(B) ]->
+ [ St_A_3(A, id, B, skA, pk(skB), x)]
 
 
 
@@ -85,28 +87,27 @@ rule A_2_Recv:
 
 // Security properties
 
-lemma Key_Secrecy:
-  "All A Kab #i. 
-     Claim_secret(A, Kab)@i 
-     ==>
-     ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i)
-     )
-  "
-
-lemma Key_Forward_Secrecy: 
-  "All A Kab #i. 
-     Claim_secret(A, Kab)@i 
-     ==>
-     ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
-     )
-  "
-
-lemma Executability:
+lemma executable:
   exists-trace
-    "Ex A B Kab #i #j. 
-       Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
-       not (Ex B #k. Rev(B)@k)"
+    "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)
+    & (All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
+    & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
+
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma secrecy_PFS:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
+
+restriction onlyonekeysetup:
+  " All X Y #i #j. KeySetup(X, Y)@i & KeySetup(X, Y)@j ==> #i = #j"
 
 end
