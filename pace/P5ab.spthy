@@ -79,7 +79,7 @@ rule I_3_send:
   in
   [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
 --[ Send(A, <'3', m>), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
-  [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(<'3', m>) ]
 
 
 // 3. R receive
@@ -109,7 +109,7 @@ rule I_4_receive:
   in
   [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(<'4', m>) ]
 --[ Recv(A, <'4', m>), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B)  ]->
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B) ]
+  [ St_I_5(A, ~id, kAB, s, x, Y, 'p', B) ]
 
 
 
