@@ -1,5 +1,5 @@
 /*
-Protocoll OTR1 implemented by Floyd
+Protocoll OTR2 implemented by Floyd
 
 */
 
@@ -8,7 +8,7 @@ Protocoll OTR1 implemented by Floyd
     A <-  B : <2, aenc('g'^y, skB), pk(skB)>
 */
 
-theory OTR1
+theory OTR2
 begin
 
 builtins: asymmetric-encryption, diffie-hellman
