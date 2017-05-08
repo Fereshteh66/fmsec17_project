@@ -6,12 +6,14 @@ builtins: symmetric-encryption
 functions: mac/2
 
 /*
+  Written by Fabian Murer
+  
 	We want to formalize the following protocol
 	protocol {
 		1. A -> B: {'1', x}
 		2. B -> A: {'2', y}
-		3. A -> B: {'3', y}_k(B,A)  (as a MAC)
-		4. B -> A: {'4', x}_k(A,B)  (as a MAC)
+		3. A -> B: {'3', y_k(B,A)}
+		4. B -> A: {'4', x_k(A,B)}
 	}
 */
 

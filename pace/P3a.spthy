@@ -5,12 +5,14 @@ begin
 functions: kdf/3, mac/2
 
 /*
+  Written by Fabian Murer
+  
 	We want to formalize the following protocol:
 
 	A -> B: {'1', x}
   B -> A: {'2', y}
-  A -> B: {'3', <A, y>}Kab
-  B -> A: {'4', <B, x>}Kab
+  A -> B: {'3', <A, y>_Kab}
+  B -> A: {'4', <B, x>_Kab}
 */
 
 
