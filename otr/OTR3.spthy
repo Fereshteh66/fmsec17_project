@@ -66,7 +66,7 @@ rule B_2_Send:
  let M = <'g' ^ ~y, sign{'2', $A, 'g' ^ ~y}skB, pk(skB)>
  in
  [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
- --[ Send($B, M ) , Running($B, $A, <'R', 'I', sign{'1', $B, X}skA>), Claim_secret($B, X ^ ~y), Honest($B), Honest($A) ]->
+ --[ Send($B, M ) , Running($B, $A, <'R', 'I', X ^ ~y>), Claim_secret($B, X ^ ~y), Honest($B), Honest($A) ]->
  [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( M ) ]
 
 
@@ -76,7 +76,7 @@ rule A_2_Recv:
  let M = <Y, sign{'2', $A, Y}skB, pkB>
  in
  [ St_A_2($A, id, $B, skA, pk(skB), x) , In( M ) ]
- --[ Recv( $A, M ), Commit($A, $B, <'I', 'R', sign{'1', $B, 'g' ^ x}skA>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
+ --[ Recv( $A, M ), Commit($A, $B, <'I', 'R', Y ^ x>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
  [ St_A_3($A, id, $B, skA, pk(skB), x)]
 
 
