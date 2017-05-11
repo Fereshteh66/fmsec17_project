@@ -11,8 +11,8 @@ functions: mac/2, map/2
 
   A -> B {'1', <p, g^x, senc(s)h(kAB)>}
   B -> A {'2', g^y}
-  A -> B {'3', <A, g^y>_h(g^xy)}
-  B -> A {'4', <B, g^x>_h(g^xy)}
+  A -> B {'3', g^y}_h(g^xy)
+  B -> A {'4', g^x}_h(g^xy)
 */
 
 
@@ -77,40 +77,40 @@ rule I_2_receive:
 // 3. I send
 rule I_3_send:
   let g = map(s, 'p')
-      m = mac(<A, g ^ x>, h(Y ^ x))
+      m = mac(<'3', g ^ x>, h(Y ^ x))
   in
   [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
---[ Send(A, <'3', m>), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(<'3', m>) ]
+--[ Send(A, m), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(m) ]
 
 
 // 3. R receive
 rule R_3_receive:
   let g = map(s, 'p')
-      m = mac(<A, X>, h(X ^ y))
+      m = mac(<'3', X>, h(X ^ y))
   in
-  [ St_R_3(B, ~id, kAB, s, X, y, 'p', A), In(<'3', m>) ]
---[ Recv(B, <'3', m>), Running(B, A, <'I', 'R', <X, g ^ y, h(X ^ y)>>), Commit(B, A, <'R', 'I', <X, g ^ y, h(X ^ y)>>), Honest(A), Honest(B), Secret(B, h(X ^ y)) ]->
+  [ St_R_3(B, ~id, kAB, s, X, y, 'p', A), In(m) ]
+--[ Recv(B, m), Running(B, A, <'I', 'R', <X, g ^ y, h(X ^ y)>>), Commit(B, A, <'R', 'I', <X, g ^ y, h(X ^ y)>>), Honest(A), Honest(B), Secret(B, h(X ^ y)) ]->
   [ St_R_4(B, ~id, kAB, s, X, y, 'p', A) ]
 
 
 // 4. R send
 rule R_4_send:
   let g = map(s, 'p')
-      m = mac(<B, g ^ y>, h(X ^ y))
+      m = mac(<'4', g ^ y>, h(X ^ y))
   in
   [ St_R_4(B, ~id, kAB, s, X, y, 'p', A) ]
---[ Send(B, <'4', m>) ]->
-  [ St_R_5(B, ~id, kAB, s, X, y, 'p', A), Out(<'4', m>) ]
+--[ Send(B, m) ]->
+  [ St_R_5(B, ~id, kAB, s, X, y, 'p', A), Out(m) ]
 
 
 // 4. I receive
 rule I_4_receive:
   let g = map(s, 'p')
-      m = mac(<B, Y>, h(Y ^ x))
+      m = mac(<'4', Y>, h(Y ^ x))
   in
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(<'4', m>) ]
---[ Recv(A, <'4', m>), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B)  ]->
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(m) ]
+--[ Recv(A, m), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B)  ]->
   [ St_I_5(A, ~id, kAB, s, x, Y, 'p', B) ]
 
 

@@ -12,8 +12,8 @@ functions: kdf/3, mac/2
 
   A -> B {'1', <x, senc(s)h(kAB)>}
   B -> A {'2', y}
-  A -> B {'3', <A, y>_Kab}
-  B -> A {'4', <B, x>_Kab}
+  A -> B {'3', y}_Kab
+  B -> A {'4', x}_Kab
 
 */
 
@@ -72,37 +72,37 @@ rule I_2_receive:
 
 // 3. I send
 rule I_3_send:
-  let mac1 = mac(<A, y>, kdf(s, x, y))
+  let mac1 = mac(<'3', y>, kdf(s, x, y))
   in
   [ St_I_3(A, ~id, kAB, x, s, y, B) ]
---[ Send(A, <'3', mac1>), Running(A, B, <'R', 'I', <x, y, kdf(s, x, y)>>) ]->
-  [ St_I_4(A, ~id, kAB, x, s, y, B), Out(<'3', mac1>) ]
+--[ Send(A, mac1), Running(A, B, <'R', 'I', <x, y, kdf(s, x, y)>>) ]->
+  [ St_I_4(A, ~id, kAB, x, s, y, B), Out(mac1) ]
 
 
 // 3. R receive
 rule R_3_receive:
-  let mac1 = mac(<A, y>, kdf(s, x, y))
+  let mac1 = mac(<'3', y>, kdf(s, x, y))
   in
-  [ St_R_3(B, ~id, kAB, x, s, y, A), In(<'3', mac1>) ]
---[ Recv(B, <'3', mac1>), Running(B, A, <'I', 'R', <x, y, kdf(s, x, y)>>), Commit(B, A, <'R', 'I', <x, y, kdf(s, x, y)>>), Honest(A), Honest(B), Secret(B, kdf(s, x, y)) ]->
+  [ St_R_3(B, ~id, kAB, x, s, y, A), In(mac1) ]
+--[ Recv(B, mac1), Running(B, A, <'I', 'R', <x, y, kdf(s, x, y)>>), Commit(B, A, <'R', 'I', <x, y, kdf(s, x, y)>>), Honest(A), Honest(B), Secret(B, kdf(s, x, y)) ]->
   [ St_R_4(B, ~id, kAB, x, s, y, A) ]
 
 
 // 4. R send
 rule R_4_send:
-  let mac2 = mac(<B, x>, kdf(s, x, y))
+  let mac2 = mac(<'4', x>, kdf(s, x, y))
   in
   [ St_R_4(B, ~id, kAB, x, s, y, A) ]
---[ Send(B, <'4', mac2>) ]->
-  [ St_R_5(B, ~id, kAB, x, s, y, A), Out(<'4', mac2>) ]
+--[ Send(B, mac2) ]->
+  [ St_R_5(B, ~id, kAB, x, s, y, A), Out(mac2) ]
 
 
 // 4. I receive
 rule I_4_receive:
-  let mac2 = mac(<B, x>, kdf(s, x, y))
+  let mac2 = mac(<'4', x>, kdf(s, x, y))
   in
-  [ St_I_4(A, ~id, kAB, x, s, y, B), In(<'4', mac2>) ]
---[ Recv(A, <'4', mac2>), Finish(), Commit(A, B, <'I', 'R', <x, y, kdf(s, x, y)>>), Secret(A, kdf(s, x, y)), Honest(A), Honest(B) ]->
+  [ St_I_4(A, ~id, kAB, x, s, y, B), In(mac2) ]
+--[ Recv(A, mac2), Finish(), Commit(A, B, <'I', 'R', <x, y, kdf(s, x, y)>>), Secret(A, kdf(s, x, y)), Honest(A), Honest(B) ]->
   [ St_I_5(A, ~id, kAB, x, s, y, B) ]
 
 

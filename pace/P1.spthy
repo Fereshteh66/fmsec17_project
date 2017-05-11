@@ -5,6 +5,8 @@ builtins: symmetric-encryption
 functions: mac/2
 
 /*
+  Written by Fabian Murer
+  
 	We want to formalize the following protocol
 	protocol {
 		1. A -> B: {'1', x}

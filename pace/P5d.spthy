@@ -9,10 +9,10 @@ functions: mac/2, map/2
   
   We want to model the following protocol
 
-  A -> B {'1', <p, g^x, senc(s)h(kAB)>}
-  B -> A {'2', g^y}
-  A -> B {'3', g^y_h(g^xy)}
-  B -> A {'4', g^x_h(g^xy)}
+  A -> B  <p, g^x, senc(s)h(kAB)>
+  B -> A  g^y
+  A -> B  g^y_h(g^xy)
+  B -> A  g^x_h(g^xy)
 */
 
 
@@ -46,15 +46,15 @@ rule I_1_send:
       m = <'p', g ^ ~x, senc{~s}h(kAB)>
   in
   [ St_I_1(A, ~id, kAB, B), Fr(~s), Fr(~x) ]
---[ Send(A, <'1', m>) ]->
-  [ St_I_2(A, ~id, kAB, ~s, ~x, 'p', B), Out(<'1', m>) ]
+--[ Send(A, m) ]->
+  [ St_I_2(A, ~id, kAB, ~s, ~x, 'p', B), Out(m) ]
 
 // 1. R receive
 rule R_1_receive:
   let m = <'p', X, senc{s}h(kAB)>
   in
-  [ St_R_1(B, ~id, kAB, A), In(<'1', m>) ]
---[ Recv(B, <'1', m>) ]->
+  [ St_R_1(B, ~id, kAB, A), In(m) ]
+--[ Recv(B, m) ]->
   [ St_R_2(B, ~id, kAB, s, X, 'p', A) ]
 
 
@@ -63,14 +63,14 @@ rule R_2_send:
   let g = map(s, 'p')
   in
   [ St_R_2(B, ~id, kAB, s, X, 'p', A), Fr(~y) ]
---[ Send(B, <'2', g ^ ~y >) ]->
-  [ St_R_3(B, ~id, kAB, s, X, ~y, 'p', A), Out(<'2', g ^ ~y>) ]
+--[ Send(B, g ^ ~y) ]->
+  [ St_R_3(B, ~id, kAB, s, X, ~y, 'p', A), Out(g ^ ~y) ]
 
 
 // 2. I receive
 rule I_2_receive:
-  [ St_I_2(A, ~id, kAB, s, x, 'p', B), In(<'2', Y>) ]
---[ Recv(A, <'2', Y>) ]->
+  [ St_I_2(A, ~id, kAB, s, x, 'p', B), In(Y) ]
+--[ Recv(A, Y) ]->
   [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
 
 
@@ -80,8 +80,8 @@ rule I_3_send:
       m = mac(g ^ x, h(Y ^ x))
   in
   [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
---[ Send(A, <'3', m>), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(<'3', m>) ]
+--[ Send(A, m), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(m) ]
 
 
 // 3. R receive
@@ -89,8 +89,8 @@ rule R_3_receive:
   let g = map(s, 'p')
       m = mac(X, h(X ^ y))
   in
-  [ St_R_3(B, ~id, kAB, s, X, y, 'p', A), In(<'3', m>) ]
---[ Recv(B, <'3', m>), Running(B, A, <'I', 'R', <X, g ^ y, h(X ^ y)>>), Commit(B, A, <'R', 'I', <X, g ^ y, h(X ^ y)>>), Honest(A), Honest(B), Secret(B, h(X ^ y)) ]->
+  [ St_R_3(B, ~id, kAB, s, X, y, 'p', A), In(m) ]
+--[ Recv(B, m), Running(B, A, <'I', 'R', <X, g ^ y, h(X ^ y)>>), Commit(B, A, <'R', 'I', <X, g ^ y, h(X ^ y)>>), Honest(A), Honest(B), Secret(B, h(X ^ y)) ]->
   [ St_R_4(B, ~id, kAB, s, X, y, 'p', A) ]
 
 
@@ -100,17 +100,17 @@ rule R_4_send:
       m = mac(g ^ y, h(X ^ y))
   in
   [ St_R_4(B, ~id, kAB, s, X, y, 'p', A) ]
---[ Send(B, <'4', m>) ]->
-  [ St_R_5(B, ~id, kAB, s, X, y, 'p', A), Out(<'4', m>) ]
+--[ Send(B, m) ]->
+  [ St_R_5(B, ~id, kAB, s, X, y, 'p', A), Out(m) ]
 
 
 // 4. I receive
 rule I_4_receive:
   let g = map(s, 'p')
-      m = mac(Y, h(Y ^ x))
+      //m = mac(Y, h(Y ^ x))
   in
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(<'4', m>) ]
---[ Recv(A, <'4', m>), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B)  ]->
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(mac(Z, h(Y ^ x))) ]
+--[ Recv(A, mac(Z, h(Y ^ x))), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B), Differ(Z, g ^ x)  ]->
   [ St_I_5(A, ~id, kAB, s, x, Y, 'p', B) ]
 
 
@@ -172,7 +172,7 @@ lemma injectiveagreementRESPONDER:
 restriction noselfkey:
   " All X Y #i. NotEq(X,Y) @i ==> not (X = Y)"
 
+restriction differ:
+  " All x y #i. Differ(x, y)@i ==> not (x = y)"
 
-restriction keysdifferent:
-  " All X Y x y e #i #j. Send(X, <'1', <'p', x, e>>)@i & Recv(Y, <'2', y>)@j ==> not x=y"
 end
