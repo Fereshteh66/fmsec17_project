@@ -11,7 +11,7 @@ Protocoll OTR3 implemented by Floyd
 theory OTR3
 begin
 
-builtins: signing, diffie-hellman
+builtins: signing, asymmetric-encryption, diffie-hellman
 
 // Setup
 
@@ -60,7 +60,8 @@ rule Init_R:
 rule I_1_sendDhX:
   let dhX = 'g'^~x
       pkA = pk(skA)
-      sig = sign(<dhX, B>, skA)
+      // sig = sign(<dhX, B>, skA)
+      sig = aenc(<dhX, B>, skA)
       m = <'1', dhX, sig, pkA>
   in
   [ St_I_0(A, id, skA, B, pkB)
@@ -74,14 +75,16 @@ rule I_1_sendDhX:
   ]
 
 rule R_1_recvDhValue:
-  let m = <'1', dhX, sig, pkA>
+  let pkA = pk(skA)
+      sig = aenc(<dhX, B>, skA)
+      m = <'1', dhX, sig, pkA>
   in
   [ St_R_0(B, id, skB, A, pkA)
   , In(m)
   ]
 --[ Recv(B, m)
   , Commit(B, A, <'R', 'I', dhX>), Honest(A), Honest(B)
-  , Restriction_Eq(verify(sig, <dhX, B>, pkA), true)
+  // , Restriction_Eq(verify(sig, <dhX, B>, pkA), true)
   ]->
   [ St_R_1(B, id, skB, A, pkA, dhX) ]
 
@@ -89,7 +92,8 @@ rule R_1_recvDhValue:
 rule R_2_sendDhValue:
   let dhY = 'g'^~y
       pkB = pk(skB)
-      sig = sign(<dhY, A>, skB)
+      // sig = sign(<dhY, A>, skB)
+      sig = aenc(<dhY, A>, skB)
       m = <'2', dhY, sig, pkB>
       sessionKey = dhX^~y
   in
@@ -105,7 +109,9 @@ rule R_2_sendDhValue:
   ]
 
 rule I_2_recvDhValue:
-  let m = <'2', dhY, sig, pkB>
+  let pkB = pk(skB)
+      sig = aenc(<dhY, A>, skB)
+      m = <'2', dhY, sig, pkB>
       sessionKey = dhY^x
   in
   [ St_I_1(A, id, skA, B, pkB, x)
@@ -114,7 +120,7 @@ rule I_2_recvDhValue:
 --[ Recv(A, m)
   , Secret(A, sessionKey), Honest(A), Honest(B)
   , Commit(A, B, <'I', 'R', sessionKey>)
-  , Restriction_Eq(verify(sig, <dhY, A>, pkB), true)
+  // , Restriction_Eq(verify(sig, <dhY, A>, pkB), true)
   ]->
   [ St_I_2(A, id, skA, B, pkB, sessionKey) ]
 
