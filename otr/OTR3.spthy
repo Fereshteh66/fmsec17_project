@@ -13,15 +13,19 @@ begin
 builtins: 
   diffie-hellman, signing
 
+functions: 
+  extract/1
 
+equations:
+  extract(sign{m}k) = m
 
 // Public key infrastructure
 
 rule Register:
- [ Fr(~sk) ]  -->  [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
+ [ Fr(~sk) ]   --[ Unique( $A ) ]->  [ !Ltk($A, ~sk), !Pk($A, pk(~sk)), Out(pk(~sk)) ]
 
 rule Reveal:
- [ !Ltk(A, ltk) ]  --[ Rev(A) ]->   [ Out(ltk) ]
+ [ !Ltk(A, ltk) ]  --[ Reveal(A) ]->   [ Out(ltk) ]
 
 
 // Initialize A
@@ -41,18 +45,18 @@ rule Init_B:
 // 1. A send
 rule A_1_Send:
 
- let M = <'g' ^ ~x, sign{'1', $B, 'g' ^ ~x}skA, pk(skA)>
+ let M = < 'g' ^ ~x, sign{'1', $B, 'g' ^ ~x}skA, pk(skA)>
  in
 
  [ St_A_1($A, id, $B, skA, pkB) , Fr(~x) ] 
- --[ Send( $A, M )]->
+ --[ Send( $A, M ), Running($A, $B, <'I', 'R', <'g' ^ ~x> >)]->
  [ St_A_2($A, id, $B, skA, pkB, ~x) , Out( M ) ]
 
 
 // 1. B receive
 rule B_1_Recv:
 
- let M = <X, sign{'1', $B, X}skA, pkA>
+ let M = < X, sign{'1', $B, X}skA, pkA>
  in
 
  [ St_B_1($B, id, $A, skB, pk(skA)), In( M ) ]
@@ -65,9 +69,9 @@ rule B_2_Send:
 
  let M = <'g' ^ ~y, sign{'2', $A, 'g' ^ ~y}skB, pk(skB)>
  in
- [ St_B_2($B, id, $A, skB, pk(skA), X) , Fr(~y) ]
- --[ Send($B, M ) , Running($B, $A, <'R', 'I', X ^ ~y>), Claim_secret($B, X ^ ~y), Honest($B), Honest($A) ]->
- [ St_B_3($B, id, $A, skB, pk(skA), X, ~y) , Out( M ) ]
+ [ St_B_2($B, id, $A, skB, pkA, X) , Fr(~y) ]
+ --[ Send($B, M ) , Running($B, $A, <'R', 'I', < X ^ ~y > >), Commit($B, $A, <'I', 'R', X >), Claim_secret($B, X ^ ~y), Honest($B), Honest($A) ]->
+ [ St_B_3($B, id, $A, skB, pkA, X, ~y) , Out( M ) ]
 
 
 // 2. A receive
@@ -76,9 +80,14 @@ rule A_2_Recv:
  let M = <Y, sign{'2', $A, Y}skB, pkB>
  in
  [ St_A_2($A, id, $B, skA, pk(skB), x) , In( M ) ]
- --[ Recv( $A, M ), Commit($A, $B, <'I', 'R', Y ^ x>), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
+ --[ Recv( $A, M ), Commit($A, $B, <'R', 'I', <Y ^ x> >), Claim_secret($A, Y ^ x) , Honest($A), Honest($B) ]->
  [ St_A_3($A, id, $B, skA, pk(skB), x)]
 
+
+
+// Restricions
+restriction Uniqueness:
+" All X #i #j. Unique(X)@i & Unique(X)@j ==> #i=#j "
 
 
 
@@ -90,7 +99,7 @@ lemma Key_Secrecy:
      Claim_secret(A, Kab)@i 
      ==>
      ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i)
+     | (Ex B #r. Reveal(B)@r & Honest(B)@i)
      )
   "
 
@@ -99,7 +108,7 @@ lemma Key_Forward_Secrecy:
      Claim_secret(A, Kab)@i 
      ==>
      ( not (Ex #k. K(Kab)@k)     
-     | (Ex B #r. Rev(B)@r & Honest(B)@i & r < i)
+     | (Ex B #r. Reveal(B)@r & Honest(B)@i & r < i)
      )
   "
 
@@ -107,13 +116,13 @@ lemma Executability:
   exists-trace
     "Ex A B Kab #i #j. 
        Claim_secret(A, Kab)@i & Claim_secret(B, Kab)@j & not (A = B) &
-       not (Ex B #k. Rev(B)@k)"
+       not (Ex B #k. Reveal(B)@k)"
 
 lemma noninjectiveagreementINITIATOR:
   "All a b t #i. 
     Commit(a,b,<'I','R',t>) @i
     ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
-        | (Ex X #r. Rev(X)@r & Honest(X) @i)"
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 
 lemma injectiveagreementINITIATOR:
@@ -123,6 +132,21 @@ lemma injectiveagreementINITIATOR:
         & j < i
         & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
                            & not (#i2 = #i)))
-              | (Ex X #r. Rev(X)@r & Honest(X) @i)"
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 end
