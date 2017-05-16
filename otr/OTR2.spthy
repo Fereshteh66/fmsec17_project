@@ -17,7 +17,9 @@ builtins: asymmetric-encryption, diffie-hellman
 
 rule Init_PKI:
   [ Fr(~newKey) ]
--->
+--[ PKI_Create($A)
+  , Restriction_Unique(<'PKI', $A>)
+  ]->
   [ !SecretKey($A, ~newKey)
   , !PublicKey($A, pk(~newKey))
   , Out(pk(~newKey))
@@ -37,8 +39,8 @@ rule Init_R:
   , !PublicKey(B, pkB)
   , Fr(~id)
   ]
---[ Create(A, ~id, 'R')
-  , Executable_NEQ(A,B)
+--[ Create(A, ~id, 'I')
+  , Executable_Unique(A)
   ]->
   [ St_R_0(A, ~id, skA, B, pkB) ]
 
@@ -47,8 +49,8 @@ rule Init_S:
   , !PublicKey(A, pkA)
   , Fr(~id)
   ]
---[ Create(B, ~id, 'S')
-  , Executable_NEQ(A,B)
+--[ Create(B, ~id, 'R')
+  , Executable_Unique(B)
   ]->
   [ St_S_0(B, ~id, skB, A, pkA) ]
 
@@ -64,7 +66,7 @@ rule R_1_sendDhX:
   , Fr(~x)
   ]
 --[ Send(A, m)
-  , Running(A, B, <'R', 'S', dhX>)
+  , Running(A, B, <'R', 'I', dhX>)
   ]->
   [ St_R_1(A, id, skA, B, pkB, ~x)
   , Out(m)
@@ -78,7 +80,7 @@ rule S_1_recvDhValue:
   , In(m)
   ]
 --[ Recv(B, m)
-  , Commit(B, A, <'R', 'S', dhX>), Honest(A), Honest(B)
+  , Commit(B, A, <'R', 'I', dhX>), Honest(A), Honest(B)
   ]->
   [ St_S_1(B, id, skB, A, pkA, dhX) ]
 
@@ -93,7 +95,7 @@ rule S_2_sendDhValue:
   , Fr(~y)
   ]
 --[ Send(B, m)
-  , Secret(B, sessionKey), Running(B, A, <'S', 'R', sessionKey>), Honest(A), Honest(B)
+  , Secret(B, sessionKey), Running(B, A, <'I', 'R', sessionKey>), Honest(A), Honest(B)
   ]->
   [ St_R_2(B, id, skB, A, pkA, sessionKey)
   , Out(m)
@@ -108,51 +110,67 @@ rule R_2_recvDhValue:
   , In(m) 
   ]
 --[ Recv(A, m)
-  , Secret(A, sessionKey), Commit(A, B, <'S', 'R', sessionKey>), Honest(A), Honest(B)
+  , Secret(A, sessionKey), Commit(A, B, <'I', 'R', sessionKey>), Honest(A), Honest(B)
   ]->
   [ St_S_2(A, id, skA, sessionKey) ]
 
+// Restricions
+
+restriction unique:
+  " All x #i #j. Restriction_Unique(x)@i & Restriction_Unique(x)@j ==> #i=#j "
 
 // Lemmas
 
 lemma executable: exists-trace
-  " (Ex A B K #i #j. Running(A, B, <'S', 'R', K>)@i & Commit(B, A, <'S', 'R', K>)@j) & not(Ex A #i. Reveal(A)@i) & not(Ex A #i. Executable_NEQ(A,A)@i) "
+  " ( Ex A B K #i #j
+    . Running(A, B, <'I', 'R', K>)@i 
+    & Commit(B, A, <'I', 'R', K>)@j
+    ) 
+  & not(Ex A #i. Reveal(A)@i) 
+  & not(Ex A #i #j. Executable_Unique(A)@i & Executable_Unique(A)@j & not(#i=#j )) 
+  "
 
 lemma secrecy:
-  " All A x #i.
-    Secret(A,x) @i ==> not (Ex #j. K(x)@j)
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 lemma secrecy_PFS:
-  " All A x #i.
-    Secret(A,x) @i ==> not (Ex #j. K(x)@j)
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i) "
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
 
-lemma noninjectiveagreementR:
-  " All a b t #i.
-    Commit(a,b,<'R', 'S', t>) @i ==> (Ex #j. Running(b,a,<'R', 'S', t>) @j)
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
-lemma injectiveagreementR:
-  " All a b t #i.
-    Commit(a,b,<'R', 'S', t>) @i ==> (Ex #j. Running(b,a,<'R', 'S', t>) @j
-      & j < i
-      & not (Ex a2 b2 #i2. Commit(a2,b2,<'R', 'S', t>) @i2
-      & not (#i2 = #i)))
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
-lemma noninjectiveagreementS:
-  " All a b t #i.
-    Commit(a,b,<'S', 'R', t>) @i ==> (Ex #j. Running(b,a,<'S', 'R', t>) @j)
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
 
-lemma injectiveagreementS:
-  " All a b t #i.
-    Commit(a,b,<'S', 'R', t>) @i ==> (Ex #j. Running(b,a,<'S', 'R', t>) @j
-      & j < i
-      & not (Ex a2 b2 #i2. Commit(a2,b2,<'S', 'R', t>) @i2
-      & not (#i2 = #i)))
-      | (Ex X #r. Reveal(X)@r & Honest(X) @i) "
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
 end
