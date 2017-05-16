@@ -77,17 +77,17 @@ rule I_2_receive:
 // 3. I send
 rule I_3_send:
   let g = map(s, 'p')
-      m = mac(g ^ x, h(Y ^ x))
+      m = mac(Y, h(Y ^ x))
   in
   [ St_I_3(A, ~id, kAB, s, x, Y, 'p', B) ]
---[ Send(A, m), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>) ]->
+--[ Send(A, m), Running(A, B, <'R', 'I', <g ^ x, Y, h(Y ^ x)>>), Differ(Y, g ^ x) ]->
   [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), Out(m) ]
 
 
 // 3. R receive
 rule R_3_receive:
   let g = map(s, 'p')
-      m = mac(X, h(X ^ y))
+      m = mac(g ^ y, h(X ^ y))
   in
   [ St_R_3(B, ~id, kAB, s, X, y, 'p', A), In(m) ]
 --[ Recv(B, m), Running(B, A, <'I', 'R', <X, g ^ y, h(X ^ y)>>), Commit(B, A, <'R', 'I', <X, g ^ y, h(X ^ y)>>), Honest(A), Honest(B), Secret(B, h(X ^ y)) ]->
@@ -97,7 +97,7 @@ rule R_3_receive:
 // 4. R send
 rule R_4_send:
   let g = map(s, 'p')
-      m = mac(g ^ y, h(X ^ y))
+      m = mac(X, h(X ^ y))
   in
   [ St_R_4(B, ~id, kAB, s, X, y, 'p', A) ]
 --[ Send(B, m) ]->
@@ -107,10 +107,10 @@ rule R_4_send:
 // 4. I receive
 rule I_4_receive:
   let g = map(s, 'p')
-      //m = mac(Y, h(Y ^ x))
+      m = mac(g ^ x, h(Y ^ x))
   in
-  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(mac(Z, h(Y ^ x))) ]
---[ Recv(A, mac(Z, h(Y ^ x))), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B), Differ(Z, g ^ x)  ]->
+  [ St_I_4(A, ~id, kAB, s, x, Y, 'p', B), In(m) ]
+--[ Recv(A, m), Finish(), Commit(A, B, <'I', 'R', <g ^ x, Y, h(Y ^ x)>>), Secret(A, h(Y ^ x)), Honest(A), Honest(B) ]->
   [ St_I_5(A, ~id, kAB, s, x, Y, 'p', B) ]
 
 
