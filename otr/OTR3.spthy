@@ -1,5 +1,5 @@
 /*
-Protocoll OTR3 implemented by Floyd
+Protocoll OTR3
 
 */
 
@@ -11,7 +11,7 @@ Protocoll OTR3 implemented by Floyd
 theory OTR3
 begin
 
-builtins: signing, asymmetric-encryption, diffie-hellman
+builtins: asymmetric-encryption, diffie-hellman
 
 // Setup
 

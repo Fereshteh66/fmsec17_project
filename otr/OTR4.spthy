@@ -1,5 +1,5 @@
 /*
-Protocoll OTR4 implemented by Floyd
+Protocoll OTR4
 
 */
 
@@ -181,7 +181,7 @@ lemma executable: exists-trace
   "  ( Ex A B K #i #j
      . Running(A, B, <'I', 'R', K>)@i
      & Commit(B, A, <'I', 'R', K>)@j
-     & not( Ex Q #k. PKI_Create(Q)@k & not(Q=A) & not(Q=B) ) // this is needed for a nice visualas Tamarin will otherwise deduce PK from messages of a second communication.
+//     & not( Ex Q #k. PKI_Create(Q)@k & not(Q=A) & not(Q=B) ) // this is needed for a nice visualas Tamarin will otherwise deduce PK from messages of a second communication.
      )
   & not(Ex A #i. Reveal(A)@i)
   & not(Ex A #i #j. Executable_Unique(A)@i & Executable_Unique(A)@j & not(#i=#j) ) // needed to avoid agents talking with themselves.
