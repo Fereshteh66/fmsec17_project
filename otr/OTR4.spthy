@@ -1,0 +1,233 @@
+/*
+Protocoll OTR4
+
+*/
+
+/* Given the PKI (sk_A, pk_A) for signing we want to formalize the following protocol:
+    A  -> B : < '1', 'g'^x >
+    A <-  B : < '2', 'g'^y >
+    A  -> B : < '3', A, sign( < 'g'^y, 'g'^x >, skA), MAC( < '0', A >, K), pk(skA) >
+    A <-  B : < '4', B, sign( < 'g'^x, 'g'^y >, skB), MAC( < '1', B >, K), pk(skB) >
+*/
+
+theory OTR4
+begin
+
+builtins: signing, diffie-hellman
+functions: MAC/2
+
+// Setup
+
+rule Init_PKI:
+  [ Fr(~newKey) ]
+--[ PKI_Create($A)
+  , Restriction_Unique(<'PKI', $A>)
+  ]->
+  [ !SecretKey($A, ~newKey)
+  , !PublicKey($A, pk(~newKey))
+  , Out(pk(~newKey))
+  ]
+
+rule Reveal_SK:
+  [ !SecretKey(A, skA) ]
+--[ Reveal(A) ]->
+  [ Out(skA) ]
+
+// Init
+// While the PKI is constant any agent may start any number of threads. 
+// A thread is bound to an id, a owned private key, a partnered agent and its public key.
+
+rule Init_I:
+  [ !SecretKey(A, skA)
+  , !PublicKey(B, pkB)
+  , Fr(~id)
+  ]
+--[ Create(A, ~id, 'I')
+  , Executable_Unique(A)
+  ]->
+  [ St_I_0(A, ~id, skA, B, pkB) ]
+
+rule Init_R:
+  [ !SecretKey(B, skB)
+  , !PublicKey(A, pkA)
+  , Fr(~id)
+  ]
+--[ Create(B, ~id, 'R')
+  , Executable_Unique(B)
+  ]->
+  [ St_R_0(B, ~id, skB, A, pkA) ]
+
+// Protocol
+
+// A  -> B : < '1', 'g'^x >
+rule I_1_sendDhX:
+  let dhX = 'g'^~x
+      m = <'1', dhX>
+  in
+  [ St_I_0(A, id, skA, B, pkB)
+  , Fr(~x)
+  ]
+--[ Send(A, m) ]->
+  [ St_I_1(A, id, skA, B, pkB, ~x)
+  , Out(m)
+  ]
+
+rule R_1_recvDhX:
+  let m = <'1', dhX>
+  in
+  [ St_R_0(B, id, skB, A, pkA)
+  , In(m)
+  ]
+--[ Recv(B, m) ]->
+  [ St_R_1(B, id, skB, A, pkA, dhX) ]
+
+// A <-  B : < '2', 'g'^y >
+rule R_2_sendDhY:
+  let dhY = 'g'^~y
+      m = <'2', dhY>
+  in
+  [ St_R_1(B, id, skB, A, pkA, dhX)
+  , Fr(~y)
+  ]
+--[ Send(B, m) ]->
+  [ St_R_2(B, id, skB, A, pkA, ~y, dhX)
+  , Out(m)
+  ]
+
+rule I_2_recvDhY:
+  let m = <'2', dhY>
+  in
+  [ St_I_1(A, id, skA, B, pkB, x)
+  , In(m)
+  ]
+--[ Recv(A, m) ]->
+  [ St_I_2(A, id, skA, B, pkB, x, dhY) ]
+
+// A  -> B : < '3', A, sign( < 'g'^y, 'g'^x >, skA), MAC( < '0', A >, K), pk(skA) >
+rule I_3_sendAck:
+  let dhX = 'g'^x
+      pkA = pk(skA)
+      sessionKey = dhY^x
+      sig = sign(<dhY, dhX>, skA)
+      mac = MAC(<'0', A>, sessionKey)
+      m = <'3', A, sig, mac, pkA>
+  in
+  [ St_I_2(A, id, skA, B, pkB, x, dhY) ]
+--[ Send(A, m)
+  , Running(A, B, <'R', 'I', sessionKey>)
+  ]->
+  [ St_I_3(A, id, skA, B, pkB, x, dhY)
+  , Out(m)
+  ]
+
+rule R_3_recvAck:
+  let dhY = 'g'^y
+      sessionKey = dhX^y
+      mac = MAC(<'0', A>, sessionKey)
+      m = <'3', A, sig, mac, pkA>
+  in
+  [ St_R_2(B, id, skB, A, pkA, y, dhX)
+  , In(m)
+  ]
+--[ Recv(B, m)
+  , Commit(B, A, <'R', 'I', sessionKey>), Secret(B, sessionKey), Honest(A), Honest(B)
+  , Restriction_Eq(verify(sig, <dhY, dhX>, pkA), true)
+  ]->
+  [ St_R_3(B, id, skB, A, pkA, y, dhX) ]
+
+// A <-  B : < '4', B, sign( < 'g'^x, 'g'^y >, skB), MAC( < '1', B >, K), pk(skB) >
+rule R_4_sendAck:
+  let dhY = 'g'^y
+      pkB = pk(skB)
+      sessionKey = dhX^y
+      sig = sign(<dhX, dhY>, skB)
+      mac = MAC(<'1', B>, sessionKey)
+      m = <'4', B, sig, mac, pkB>
+  in 
+  [ St_R_3(B, id, skB, A, pkA, y, dhX) ]
+--[ Send(B, m)
+  , Running(B, A, <'I', 'R', sessionKey>)
+  ]->
+  [ St_R_4(B, id, skB, A, pkA, sessionKey)
+  , Out(m)
+  ]
+
+rule I_4_recvAck:
+  let dhX = 'g'^x
+      sessionKey = dhY^x
+      mac = MAC(<'1', B>, sessionKey)
+      m = <'4', B, sig, mac, pkB>
+  in
+  [ St_I_3(A, id, skA, B, pkB, x, dhY)
+  , In(m)
+  ]
+--[ Recv(A, m)
+  , Commit(A, B, <'I', 'R', sessionKey>), Secret(A, sessionKey), Honest(A), Honest(B)
+  , Restriction_Eq(verify(sig, <dhX, dhY>, pkB), true)
+  ]->
+  [ St_I_4(A, id, skA, B, pkB, sessionKey) ]
+
+// Restrictions
+
+restriction unique:
+  " All x #i #j. Restriction_Unique(x)@i & Restriction_Unique(x)@j ==> #i=#j "
+
+restriction equal:
+  " All x y #i. Restriction_Eq(x, y)@i ==> x=y "
+
+// Lemmas
+
+lemma executable: exists-trace
+  "  ( Ex A B K #i #j
+     . Running(A, B, <'I', 'R', K>)@i
+     & Commit(B, A, <'I', 'R', K>)@j
+//     & not( Ex Q #k. PKI_Create(Q)@k & not(Q=A) & not(Q=B) ) // this is needed for a nice visualas Tamarin will otherwise deduce PK from messages of a second communication.
+     )
+  & not(Ex A #i. Reveal(A)@i)
+  & not(Ex A #i #j. Executable_Unique(A)@i & Executable_Unique(A)@j & not(#i=#j) ) // needed to avoid agents talking with themselves.
+  "
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma secrecy_PFS:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i & r < i)"
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+lemma noninjectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementRESPONDER:
+  "All a b t #i. 
+    Commit(a,b,<'R','I',t>) @i
+    ==> (Ex #j. Running(b,a,<'R','I',t>) @j 
+              & j < i
+              & not (Ex a2 b2 #i2. Commit(a2,b2,<'R','I',t>) @i2
+                                 & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+end
