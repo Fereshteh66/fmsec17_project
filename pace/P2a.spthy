@@ -108,12 +108,18 @@ rule I_4_receive:
 	Lemmas
 **/
 
+
+// this lemma will get verified. We needed to extend it in order to get the supposed execution
 lemma executable:
   exists-trace
     "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)
     & (All X Y id1 id2 #i #j. Create_I(X, id1)@i & Create_I(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)
     & (All X Y id1 id2 #i #j. Create_R(X, id1)@i & Create_R(Y, id2)@j ==> X = Y & id1 = id2 & #i = #j)"
 
+
+/**
+  All of the following lemmas won't get verified
+**/
 
 lemma noninjectiveagreementINITIATOR:
   "All a b t #i. 

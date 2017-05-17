@@ -115,7 +115,13 @@ rule I_4_receive:
 
 
 
-// need to execute manually to get the correct execution displayed (unless you have the last restriction active).
+/**
+  Lemmas
+
+  All of the following lemmas will get verified
+**/
+
+
 lemma executable:
   exists-trace
     "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"

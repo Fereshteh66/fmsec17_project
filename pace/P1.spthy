@@ -72,6 +72,8 @@ rule I_2_receive:
 
 /**
 	Lemmas
+
+  All of the following lemmas will get verified.
 **/
 
 lemma executable:

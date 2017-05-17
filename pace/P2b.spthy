@@ -110,6 +110,9 @@ rule I_4_receive:
 
 /**
 	Lemmas
+
+  All of the follwoing lemmas will get verified. We again extended the executable lemma in order to get
+  the supposed execution
 **/
 
 lemma executable:

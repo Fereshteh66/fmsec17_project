@@ -102,6 +102,14 @@ rule I_4_receive:
   [ St_I_5(A, ~id, kAB, x, y, B) ]
 
 
+
+/**
+  Lemmas
+
+  All of the follwoing lemmas will get verified
+**/
+
+
 lemma executable:
   exists-trace
     "Ex #i. Finish() @i & not (Ex A #j. Reveal(A)@j)"
