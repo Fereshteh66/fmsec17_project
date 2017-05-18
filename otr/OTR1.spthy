@@ -4,14 +4,14 @@ Protocoll OTR1
 */
 
 /* Given the PKI (sk_A, pk_A) for signing we want to formalize the following protocol:
-    A  -> B : <1, aenc('g'^x, skA), pk(skA)>
-    A <-  B : <2, aenc('g'^y, skB), pk(skB)>
+    A  -> B : <1, sign('g'^x, skA), pk(skA)>
+    A <-  B : <2, sign('g'^y, skB), pk(skB)>
 */
 
 theory OTR1
 begin
 
-builtins: asymmetric-encryption, diffie-hellman
+builtins: asymmetric-encryption, diffie-hellman, signing
 
 // Setup
 
@@ -56,11 +56,11 @@ rule Init_S:
 
 // Protocol
 
-// A  -> B : <1, aenc('g'^x, skA), pk(skA)>
+// A  -> B : <1, sign('g'^x, skA), pk(skA)>
 rule R_1_sendDhX:
   let dhX = 'g'^~x
       pkA = pk(skA)
-      m = <'1', aenc(dhX, skA), pkA>
+      m = <'1', sign(dhX, skA), pkA>
   in
   [ St_R_0(A, id, skA, B, pkB)
   , Fr(~x)
@@ -74,7 +74,7 @@ rule R_1_sendDhX:
 
 rule S_1_recvDhValue:
   let pkA = pk(skA)
-      m = <'1', aenc(dhX, skA), pkA>
+      m = <'1', sign(dhX, skA), pkA>
   in
   [ St_S_0(B, id, skB, A, pkA)
   , In(m)
@@ -84,11 +84,11 @@ rule S_1_recvDhValue:
   ]->
   [ St_S_1(B, id, skB, A, pkA, dhX) ]
 
-// A <-  B : <2, aenc('g'^y, skB), pk(skB)>
+// A <-  B : <2, sign('g'^y, skB), pk(skB)>
 rule S_2_sendDhValue:
   let dhY = 'g'^~y
       pkB = pk(skB)
-      m = <'2', aenc(dhY, skB), pkB>
+      m = <'2', sign(dhY, skB), pkB>
       sessionKey = dhX^~y
   in
   [ St_S_1(B, id, skB, A, pkA, dhX)
@@ -103,7 +103,7 @@ rule S_2_sendDhValue:
 
 rule R_2_recvDhValue:
   let pkB = pk(skB)
-      m = <'2', aenc(dhY, skB), pkB>
+      m = <'2', sign(dhY, skB), pkB>
       sessionKey = dhY^x
   in
   [ St_R_1(A, id, skA, B, pkB, x)
