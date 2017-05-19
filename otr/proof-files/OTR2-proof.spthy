@@ -1,0 +1,716 @@
+theory OTR2 begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: adec/2, aenc/2, fst/1, pair/2, pk/1, snd/1
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+rule (modulo E) Init_PKI:
+   [ Fr( ~newKey ) ]
+  --[ PKI_Create( $A ), Restriction_Unique( <'PKI', $A> ) ]->
+   [
+   !SecretKey( $A, ~newKey ), !PublicKey( $A, pk(~newKey) ),
+   Out( pk(~newKey) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_SK:
+   [ !SecretKey( A, skA ) ] --[ Reveal( A ) ]-> [ Out( skA ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_I:
+   [ !SecretKey( A, skA ), !PublicKey( B, pkB ), Fr( ~id ) ]
+  --[ Create( A, ~id, 'I' ), Executable_Unique( A ) ]->
+   [ St_I_0( A, ~id, skA, B, pkB ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_R:
+   [ !SecretKey( B, skB ), !PublicKey( A, pkA ), Fr( ~id ) ]
+  --[ Create( B, ~id, 'R' ), Executable_Unique( B ) ]->
+   [ St_R_0( B, ~id, skB, A, pkA ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) I_1_sendDhX:
+   [ St_I_0( A, id, skA, B, pkB ), Fr( ~x ) ]
+  --[
+  Send( A, <'1', aenc('g'^~x, skA), pk(skA)> ),
+  Running( A, B, <'R', 'I', 'g'^~x> )
+  ]->
+   [
+   St_I_1( A, id, skA, B, pkB, ~x ),
+   Out( <'1', aenc('g'^~x, skA), pk(skA)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_1_recvDhX:
+   [
+   St_R_0( B, id, skB, A, pk(skA) ),
+   In( <'1', aenc(dhX, skA), pk(skA)> )
+   ]
+  --[
+  Recv( B, <'1', aenc(dhX, skA), pk(skA)> ),
+  Commit( B, A, <'R', 'I', dhX> ), Honest( A ), Honest( B )
+  ]->
+   [ St_R_1( B, id, skB, A, pk(skA), dhX ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_2_sendDhY:
+   [ St_R_1( B, id, skB, A, pkA, dhX ), Fr( ~y ) ]
+  --[
+  Send( B, <'2', aenc('g'^~y, skB), pk(skB)> ), Secret( B, dhX^~y ),
+  Running( B, A, <'I', 'R', dhX^~y> ), Honest( A ), Honest( B )
+  ]->
+   [
+   St_R_2( B, id, skB, A, pkA, dhX^~y ),
+   Out( <'2', aenc('g'^~y, skB), pk(skB)> )
+   ]
+
+  /*
+  rule (modulo AC) R_2_sendDhY:
+     [ St_R_1( B, id, skB, A, pkA, dhX ), Fr( ~y ) ]
+    --[
+    Send( B, <'2', aenc('g'^~y, skB), pk(skB)> ), Secret( B, z ),
+    Running( B, A, <'I', 'R', z> ), Honest( A ), Honest( B )
+    ]->
+     [
+     St_R_2( B, id, skB, A, pkA, z ),
+     Out( <'2', aenc('g'^~y, skB), pk(skB)> )
+     ]
+    variants (modulo AC)
+    1. ~y    = ~y.13
+       dhX   = dhX.16
+       z     = dhX.16^~y.13
+    
+    2. ~y    = ~y.17
+       dhX   = z.24^inv(~y.17)
+       z     = z.24
+    
+    3. ~y    = ~y.95
+       dhX   = x.187^x.188
+       z     = x.187^(~y.95*x.188)
+    
+    4. ~y    = ~y.96
+       dhX   = x.189^inv((~y.96*x.190))
+       z     = x.189^inv(x.190)
+    
+    5. ~y    = ~y.96
+       dhX   = x.189^(x.190*inv(~y.96))
+       z     = x.189^x.190
+    
+    6. ~y    = ~y.97
+       dhX   = x.190^(x.192*inv((~y.97*x.191)))
+       z     = x.190^(x.192*inv(x.191))
+  */
+
+rule (modulo E) I_2_recvDhY:
+   [
+   St_I_1( A, id, skA, B, pk(skB), x ),
+   In( <'2', aenc(dhY, skB), pk(skB)> )
+   ]
+  --[
+  Recv( A, <'2', aenc(dhY, skB), pk(skB)> ), Secret( A, dhY^x ),
+  Commit( A, B, <'I', 'R', dhY^x> ), Honest( A ), Honest( B )
+  ]->
+   [ St_I_2( A, id, skA, dhY^x ) ]
+
+  /*
+  rule (modulo AC) I_2_recvDhY:
+     [
+     St_I_1( A, id, skA, B, pk(skB), x ),
+     In( <'2', aenc(dhY, skB), pk(skB)> )
+     ]
+    --[
+    Recv( A, <'2', aenc(dhY, skB), pk(skB)> ), Secret( A, z ),
+    Commit( A, B, <'I', 'R', z> ), Honest( A ), Honest( B )
+    ]->
+     [ St_I_2( A, id, skA, z ) ]
+    variants (modulo AC)
+     1. dhY   = dhY.11
+        x     = one
+        z     = dhY.11
+    
+     2. dhY   = dhY.15
+        x     = x.19
+        z     = dhY.15^x.19
+    
+     3. dhY   = x.13^x.14
+        x     = inv((x.14*x.15))
+        z     = x.13^inv(x.15)
+    
+     4. dhY   = x.13^x.14
+        x     = (x.15*inv(x.14))
+        z     = x.13^x.15
+    
+     5. dhY   = x.13^inv(x.14)
+        x     = (x.14*x.15)
+        z     = x.13^x.15
+    
+     6. dhY   = x.13^inv(x.15)
+        x     = inv(x.14)
+        z     = x.13^inv((x.14*x.15))
+    
+     7. dhY   = x.13^(x.14*x.15)
+        x     = inv(x.14)
+        z     = x.13^x.15
+    
+     8. dhY   = x.14^x.15
+        x     = (x.17*inv((x.15*x.16)))
+        z     = x.14^(x.17*inv(x.16))
+    
+     9. dhY   = x.14^inv(x.15)
+        x     = (x.17*inv(x.16))
+        z     = x.14^(x.17*inv((x.15*x.16)))
+    
+    10. dhY   = x.14^inv((x.15*x.16))
+        x     = (x.16*x.17)
+        z     = x.14^(x.17*inv(x.15))
+    
+    11. dhY   = x.14^inv((x.16*x.17))
+        x     = (x.17*inv(x.15))
+        z     = x.14^inv((x.15*x.16))
+    
+    12. dhY   = x.14^(x.15*x.17)
+        x     = (x.16*inv(x.15))
+        z     = x.14^(x.16*x.17)
+    
+    13. dhY   = x.14^(x.15*x.17*inv(x.16))
+        x     = (x.16*inv(x.15))
+        z     = x.14^x.17
+    
+    14. dhY   = x.14^(x.15*inv(x.16))
+        x     = (x.16*x.17*inv(x.15))
+        z     = x.14^x.17
+    
+    15. dhY   = x.14^(x.15*inv((x.16*x.17)))
+        x     = (x.17*inv(x.15))
+        z     = x.14^inv(x.16)
+    
+    16. dhY   = x.14^(x.16*x.17)
+        x     = inv((x.15*x.16))
+        z     = x.14^(x.17*inv(x.15))
+    
+    17. dhY   = x.14^(x.17*inv(x.15))
+        x     = inv((x.16*x.17))
+        z     = x.14^inv((x.15*x.16))
+    
+    18. dhY   = x.14^(x.17*inv(x.15))
+        x     = (x.15*x.16)
+        z     = x.14^(x.16*x.17)
+    
+    19. dhY   = x.14^(x.17*inv(x.15))
+        x     = (x.15*inv((x.16*x.17)))
+        z     = x.14^inv(x.16)
+    
+    20. dhY   = x.14^(x.17*inv(x.16))
+        x     = inv(x.15)
+        z     = x.14^(x.17*inv((x.15*x.16)))
+    
+    21. dhY   = x.15^inv((x.17*x.18))
+        x     = (x.18*x.19*inv(x.16))
+        z     = x.15^(x.19*inv((x.16*x.17)))
+    
+    22. dhY   = x.15^(x.16*x.19*inv(x.17))
+        x     = (x.17*x.18*inv(x.16))
+        z     = x.15^(x.18*x.19)
+    
+    23. dhY   = x.15^(x.16*x.19*inv((x.17*x.18)))
+        x     = (x.18*inv(x.16))
+        z     = x.15^(x.19*inv(x.17))
+    
+    24. dhY   = x.15^(x.16*inv((x.17*x.18)))
+        x     = (x.18*x.19*inv(x.16))
+        z     = x.15^(x.19*inv(x.17))
+    
+    25. dhY   = x.15^(x.17*x.19)
+        x     = (x.18*inv((x.16*x.17)))
+        z     = x.15^(x.18*x.19*inv(x.16))
+    
+    26. dhY   = x.15^(x.17*inv((x.18*x.19)))
+        x     = (x.19*inv((x.16*x.17)))
+        z     = x.15^inv((x.16*x.18))
+    
+    27. dhY   = x.15^(x.18*x.19*inv(x.16))
+        x     = inv((x.17*x.18))
+        z     = x.15^(x.19*inv((x.16*x.17)))
+    
+    28. dhY   = x.15^(x.18*x.19*inv(x.16))
+        x     = (x.16*inv((x.17*x.18)))
+        z     = x.15^(x.19*inv(x.17))
+    
+    29. dhY   = x.15^(x.18*inv(x.16))
+        x     = (x.16*x.19*inv((x.17*x.18)))
+        z     = x.15^(x.19*inv(x.17))
+    
+    30. dhY   = x.15^(x.18*inv(x.16))
+        x     = (x.19*inv((x.17*x.18)))
+        z     = x.15^(x.19*inv((x.16*x.17)))
+    
+    31. dhY   = x.15^(x.19*inv(x.17))
+        x     = (x.18*inv(x.16))
+        z     = x.15^(x.18*x.19*inv((x.16*x.17)))
+    
+    32. dhY   = x.15^(x.19*inv((x.16*x.17)))
+        x     = (x.17*x.18)
+        z     = x.15^(x.18*x.19*inv(x.16))
+    
+    33. dhY   = x.15^(x.19*inv((x.17*x.18)))
+        x     = (x.18*inv(x.16))
+        z     = x.15^(x.19*inv((x.16*x.17)))
+    
+    34. dhY   = z.15^inv(x.13)
+        x     = x.13
+        z     = z.15
+    
+    35. dhY   = x.16^(x.17*x.21*inv((x.18*x.19)))
+        x     = (x.19*x.20*inv(x.17))
+        z     = x.16^(x.20*x.21*inv(x.18))
+    
+    36. dhY   = x.16^(x.18*x.21*inv((x.19*x.20)))
+        x     = (x.20*inv((x.17*x.18)))
+        z     = x.16^(x.21*inv((x.17*x.19)))
+    
+    37. dhY   = x.16^(x.18*inv((x.19*x.20)))
+        x     = (x.20*x.21*inv((x.17*x.18)))
+        z     = x.16^(x.21*inv((x.17*x.19)))
+    
+    38. dhY   = x.16^(x.19*x.21*inv(x.17))
+        x     = (x.17*x.20*inv((x.18*x.19)))
+        z     = x.16^(x.20*x.21*inv(x.18))
+    
+    39. dhY   = x.16^(x.19*x.21*inv(x.17))
+        x     = (x.20*inv((x.18*x.19)))
+        z     = x.16^(x.20*x.21*inv((x.17*x.18)))
+    
+    40. dhY   = x.16^(x.21*inv((x.18*x.19)))
+        x     = (x.19*x.20*inv(x.17))
+        z     = x.16^(x.20*x.21*inv((x.17*x.18)))
+    
+    41. dhY   = x.17^(x.19*x.23*inv((x.20*x.21)))
+        x     = (x.21*x.22*inv((x.18*x.19)))
+        z     = x.17^(x.22*x.23*inv((x.18*x.20)))
+    
+    42. dhY   = z.18^x.26
+        x     = inv(x.26)
+        z     = z.18
+    
+    43. dhY   = z.19^(x.27*inv(x.28))
+        x     = (x.28*inv(x.27))
+        z     = z.19
+    
+    44. dhY   = x.35^x.36
+        x     = x.22
+        z     = x.35^(x.22*x.36)
+    
+    45. dhY   = x.36^inv((x.23*x.38))
+        x     = x.23
+        z     = x.36^inv(x.38)
+    
+    46. dhY   = x.36^(x.38*inv(x.23))
+        x     = x.23
+        z     = x.36^x.38
+    
+    47. dhY   = x.37^(x.40*inv((x.24*x.39)))
+        x     = x.24
+        z     = x.37^(x.40*inv(x.39))
+  */
+
+restriction unique:
+  "∀ x #i #j.
+    ((Restriction_Unique( x ) @ #i) ∧ (Restriction_Unique( x ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+lemma executable:
+  exists-trace
+  "((∃ A B K #i #j.
+      (Running( A, B, <'I', 'R', K> ) @ #i) ∧
+      (Commit( B, A, <'I', 'R', K> ) @ #j)) ∧
+    (¬(∃ A #i. Reveal( A ) @ #i))) ∧
+   (¬(∃ A #i #j.
+       ((Executable_Unique( A ) @ #i) ∧ (Executable_Unique( A ) @ #j)) ∧
+       (¬(#i = #j))))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∃ A B K #i #j.
+   (Running( A, B, <'I', 'R', K> ) @ #i) ∧
+   (Commit( B, A, <'I', 'R', K> ) @ #j)) ∧
+ (∀ A #i. (Reveal( A ) @ #i) ⇒ ⊥) ∧
+ (∀ A #i #j.
+   (Executable_Unique( A ) @ #i) ∧ (Executable_Unique( A ) @ #j)
+  ⇒
+   #i = #j)"
+*/
+simplify
+solve( Running( A, B, <'I', 'R', K> ) @ #i )
+  case R_2_sendDhY
+  solve( St_R_1( A, id, skB, B, pkA, dhX ) ▶₀ #i )
+    case R_1_recvDhX
+    solve( Commit( $A.1, $A, <'I', 'R', K> ) @ #j )
+      case I_2_recvDhY
+      solve( St_I_1( $A.1, id.1, skA, $A, pk(skB), x ) ▶₀ #j )
+        case I_1_sendDhX
+        solve( !KU( aenc(dhX, ~newKey.1) ) @ #vk.3 )
+          case I_1_sendDhX
+          solve( !KU( pk(~newKey.1) ) @ #vk.4 )
+            case I_1_sendDhX
+            solve( !KU( aenc('g'^~y, ~newKey) ) @ #vk.8 )
+              case R_2_sendDhY
+              solve( !KU( pk(~newKey) ) @ #vk.9 )
+                case Init_PKI
+                SOLVED // trace found
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secrecy:
+  all-traces
+  "∀ A x #i.
+    (Secret( A, x ) @ #i) ⇒
+    ((¬(∃ #j. K( x ) @ #j)) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ A x #i.
+  (Secret( A, x ) @ #i)
+ ∧
+  (∃ #j. (K( x ) @ #j)) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Secret( A, x ) @ #i )
+  case I_2_recvDhY
+  solve( St_I_1( A, id, skA, B, pk(skB), x ) ▶₀ #i )
+    case I_1_sendDhX
+    solve( !KU( aenc(dhY, ~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      solve( !KU( 'g'^(~x*~x.1) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.8 )
+      qed
+    next
+      case R_2_sendDhY
+      solve( !KU( 'g'^(~x*~y) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.13 )
+      qed
+    next
+      case c_aenc
+      solve( !KU( ~newKey.1 ) @ #vk.7 )
+        case Reveal_SK
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+next
+  case R_2_sendDhY
+  solve( St_R_1( A, id, skB, A.1, pkA, dhX ) ▶₀ #i )
+    case R_1_recvDhX
+    solve( !KU( aenc(dhX, ~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      solve( !KU( 'g'^(~x*~y) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.8 )
+      qed
+    next
+      case R_2_sendDhY
+      solve( !KU( 'g'^(~y*~y.1) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~y ) @ #vk.12 )
+      qed
+    next
+      case c_aenc
+      solve( !KU( ~newKey.1 ) @ #vk.7 )
+        case Reveal_SK
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+qed
+
+lemma secrecy_PFS:
+  all-traces
+  "∀ A x #i.
+    (Secret( A, x ) @ #i) ⇒
+    ((¬(∃ #j. K( x ) @ #j)) ∨
+     (∃ X #r. ((Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)) ∧ (#r < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ A x #i.
+  (Secret( A, x ) @ #i)
+ ∧
+  (∃ #j. (K( x ) @ #j)) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ¬(#r < #i))"
+*/
+simplify
+solve( Secret( A, x ) @ #i )
+  case I_2_recvDhY
+  solve( St_I_1( A, id, skA, B, pk(skB), x ) ▶₀ #i )
+    case I_1_sendDhX
+    solve( !KU( aenc(dhY, ~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      solve( !KU( 'g'^(~x*~x.1) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.8 )
+      qed
+    next
+      case R_2_sendDhY
+      solve( !KU( 'g'^(~x*~y) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.13 )
+      qed
+    next
+      case c_aenc
+      solve( !KU( ~newKey.1 ) @ #vk.7 )
+        case Reveal_SK
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+next
+  case R_2_sendDhY
+  solve( St_R_1( A, id, skB, A.1, pkA, dhX ) ▶₀ #i )
+    case R_1_recvDhX
+    solve( !KU( aenc(dhX, ~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      solve( !KU( 'g'^(~x*~y) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~x ) @ #vk.8 )
+      qed
+    next
+      case R_2_sendDhY
+      solve( !KU( 'g'^(~y*~y.1) ) @ #vk.1 )
+        case cexp
+        by solve( !KU( ~y ) @ #vk.12 )
+      qed
+    next
+      case c_aenc
+      solve( !KU( ~newKey.1 ) @ #vk.7 )
+        case Reveal_SK
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+qed
+
+lemma noninjectiveagreementINITIATOR:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'I', 'R', t> ) @ #i) ⇒
+    ((∃ #j. Running( b, a, <'I', 'R', t> ) @ #j) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'I', 'R', t> ) @ #i)
+ ∧
+  (∀ #j. (Running( b, a, <'I', 'R', t> ) @ #j) ⇒ ⊥) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Commit( a, b, <'I', 'R', t> ) @ #i )
+  case I_2_recvDhY
+  solve( St_I_1( a, id, skA, b, pk(skB), x ) ▶₀ #i )
+    case I_1_sendDhX
+    solve( !KU( pk(~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      by sorry
+    next
+      case Init_PKI
+      solve( !KU( aenc(dhY, ~newKey.1) ) @ #vk.4 )
+        case I_1_sendDhX
+        SOLVED // trace found
+      next
+        case R_2_sendDhY
+        solve( !KU( pk(~newKey.2) ) @ #vk.9 )
+          case I_1_sendDhX
+          by sorry
+        next
+          case Init_PKI
+          solve( !KU( aenc(dhX, ~newKey.2) ) @ #vk.9 )
+            case I_1_sendDhX
+            SOLVED // trace found
+          next
+            case R_2_sendDhY
+            by sorry
+          next
+            case c_aenc
+            by sorry
+          qed
+        next
+          case R_2_sendDhY
+          by sorry
+        next
+          case c_pk
+          by sorry
+        qed
+      next
+        case c_aenc
+        by sorry
+      qed
+    next
+      case R_2_sendDhY
+      by sorry
+    next
+      case c_pk
+      by sorry
+    qed
+  qed
+qed
+
+lemma injectiveagreementINITIATOR:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'I', 'R', t> ) @ #i) ⇒
+    ((∃ #j.
+       ((Running( b, a, <'I', 'R', t> ) @ #j) ∧ (#j < #i)) ∧
+       (¬(∃ a2 b2 #i2.
+           (Commit( a2, b2, <'I', 'R', t> ) @ #i2) ∧ (¬(#i2 = #i))))) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'I', 'R', t> ) @ #i)
+ ∧
+  (∀ #j.
+    (Running( b, a, <'I', 'R', t> ) @ #j)
+   ⇒
+    ((¬(#j < #i)) ∨
+     (∃ a2 b2 #i2.
+       (Commit( a2, b2, <'I', 'R', t> ) @ #i2) ∧ ¬(#i2 = #i)))) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Commit( a, b, <'I', 'R', t> ) @ #i )
+  case I_2_recvDhY
+  solve( St_I_1( a, id, skA, b, pk(skB), x ) ▶₀ #i )
+    case I_1_sendDhX
+    solve( !KU( pk(~newKey.1) ) @ #vk.4 )
+      case I_1_sendDhX
+      by sorry
+    next
+      case Init_PKI
+      solve( !KU( aenc(dhY, ~newKey.1) ) @ #vk.4 )
+        case I_1_sendDhX
+        SOLVED // trace found
+      next
+        case R_2_sendDhY
+        solve( !KU( pk(~newKey.2) ) @ #vk.9 )
+          case I_1_sendDhX
+          by sorry
+        next
+          case Init_PKI
+          solve( !KU( aenc(dhX, ~newKey.2) ) @ #vk.9 )
+            case I_1_sendDhX
+            SOLVED // trace found
+          next
+            case R_2_sendDhY
+            by sorry
+          next
+            case c_aenc
+            by sorry
+          qed
+        next
+          case R_2_sendDhY
+          by sorry
+        next
+          case c_pk
+          by sorry
+        qed
+      next
+        case c_aenc
+        by sorry
+      qed
+    next
+      case R_2_sendDhY
+      by sorry
+    next
+      case c_pk
+      by sorry
+    qed
+  qed
+qed
+
+lemma noninjectiveagreementRESPONDER:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'R', 'I', t> ) @ #i) ⇒
+    ((∃ #j. Running( b, a, <'R', 'I', t> ) @ #j) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'R', 'I', t> ) @ #i)
+ ∧
+  (∀ #j. (Running( b, a, <'R', 'I', t> ) @ #j) ⇒ ⊥) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Commit( a, b, <'R', 'I', t> ) @ #i )
+  case R_1_recvDhX
+  solve( St_R_0( a, id, skB, b, pk(skA) ) ▶₀ #i )
+    case Init_R
+    solve( !KU( aenc(t, ~newKey.1) ) @ #vk.3 )
+      case I_1_sendDhX
+      solve( !KU( pk(~newKey.1) ) @ #vk.4 )
+        case I_1_sendDhX
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+lemma injectiveagreementRESPONDER:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'R', 'I', t> ) @ #i) ⇒
+    ((∃ #j.
+       ((Running( b, a, <'R', 'I', t> ) @ #j) ∧ (#j < #i)) ∧
+       (¬(∃ a2 b2 #i2.
+           (Commit( a2, b2, <'R', 'I', t> ) @ #i2) ∧ (¬(#i2 = #i))))) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'R', 'I', t> ) @ #i)
+ ∧
+  (∀ #j.
+    (Running( b, a, <'R', 'I', t> ) @ #j)
+   ⇒
+    ((¬(#j < #i)) ∨
+     (∃ a2 b2 #i2.
+       (Commit( a2, b2, <'R', 'I', t> ) @ #i2) ∧ ¬(#i2 = #i)))) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Commit( a, b, <'R', 'I', t> ) @ #i )
+  case R_1_recvDhX
+  solve( St_R_0( a, id, skB, b, pk(skA) ) ▶₀ #i )
+    case Init_R
+    solve( !KU( aenc(t, ~newKey.1) ) @ #vk.3 )
+      case I_1_sendDhX
+      solve( !KU( pk(~newKey.1) ) @ #vk.4 )
+        case I_1_sendDhX
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

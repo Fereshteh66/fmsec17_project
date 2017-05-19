@@ -34,7 +34,7 @@ rule Reveal_SK:
 // While the PKI is constant any agent may start any number of threads. 
 // A thread is bound to an id, a owned private key, a partnered agent and its public key.
 
-rule Init_R:
+rule Init_I:
   [ !SecretKey(A, skA)
   , !PublicKey(B, pkB)
   , Fr(~id)
@@ -42,9 +42,9 @@ rule Init_R:
 --[ Create(A, ~id, 'I')
   , Executable_Unique(A)
   ]->
-  [ St_R_0(A, ~id, skA, B, pkB) ]
+  [ St_I_0(A, ~id, skA, B, pkB) ]
 
-rule Init_S:
+rule Init_R:
   [ !SecretKey(B, skB)
   , !PublicKey(A, pkA)
   , Fr(~id)
@@ -52,46 +52,46 @@ rule Init_S:
 --[ Create(B, ~id, 'R')
   , Executable_Unique(B)
   ]->
-  [ St_S_0(B, ~id, skB, A, pkA) ]
+  [ St_R_0(B, ~id, skB, A, pkA) ]
 
 // Protocol
 
 // A  -> B : <1, aenc('g'^x, skA), pk(skA)>
-rule R_1_sendDhX:
+rule I_1_sendDhX:
   let dhX = 'g'^~x
       pkA = pk(skA)
       m = <'1', aenc(dhX, skA), pkA>
   in
-  [ St_R_0(A, id, skA, B, pkB)
+  [ St_I_0(A, id, skA, B, pkB)
   , Fr(~x)
   ]
 --[ Send(A, m)
   , Running(A, B, <'R', 'I', dhX>)
   ]->
-  [ St_R_1(A, id, skA, B, pkB, ~x)
+  [ St_I_1(A, id, skA, B, pkB, ~x)
   , Out(m)
   ]
 
-rule S_1_recvDhValue:
+rule R_1_recvDhValue:
   let pkA = pk(skA)
       m = <'1', aenc(dhX, skA), pkA>
   in
-  [ St_S_0(B, id, skB, A, pkA)
+  [ St_R_0(B, id, skB, A, pkA)
   , In(m)
   ]
 --[ Recv(B, m)
   , Commit(B, A, <'R', 'I', dhX>), Honest(A), Honest(B)
   ]->
-  [ St_S_1(B, id, skB, A, pkA, dhX) ]
+  [ St_R_1(B, id, skB, A, pkA, dhX) ]
 
 // A <-  B : <2, aenc('g'^y, skB), pk(skB)>
-rule S_2_sendDhValue:
+rule R_2_sendDhValue:
   let dhY = 'g'^~y
       pkB = pk(skB)
       m = <'2', aenc(dhY, skB), pkB>
       sessionKey = dhX^~y
   in
-  [ St_S_1(B, id, skB, A, pkA, dhX)
+  [ St_R_1(B, id, skB, A, pkA, dhX)
   , Fr(~y)
   ]
 --[ Send(B, m)
@@ -101,18 +101,18 @@ rule S_2_sendDhValue:
   , Out(m)
   ]
 
-rule R_2_recvDhValue:
+rule I_2_recvDhValue:
   let pkB = pk(skB)
       m = <'2', aenc(dhY, skB), pkB>
       sessionKey = dhY^x
   in
-  [ St_R_1(A, id, skA, B, pkB, x)
+  [ St_I_1(A, id, skA, B, pkB, x)
   , In(m) 
   ]
 --[ Recv(A, m)
   , Secret(A, sessionKey), Commit(A, B, <'I', 'R', sessionKey>), Honest(A), Honest(B)
   ]->
-  [ St_S_2(A, id, skA, sessionKey) ]
+  [ St_I_2(A, id, skA, sessionKey) ]
 
 // Restricions
 
