@@ -13,6 +13,8 @@ begin
 
 builtins: asymmetric-encryption, diffie-hellman
 
+equations: adec(aenc(m,sk),pk(sk))=m
+
 // Setup
 
 rule Init_PKI:
@@ -129,6 +131,16 @@ lemma executable: exists-trace
   & not(Ex A #i. Reveal(A)@i) 
   & not(Ex A #i #j. Executable_Unique(A)@i & Executable_Unique(A)@j & not(#i=#j )) 
   "
+
+lemma example_attack: exists-trace
+  " Ex A B E K #i #j
+  . Running(B, E, <'I','R',K>)@i
+  & Commit(A, B, <'I','R',K>)@j
+  & not(Ex #u. Executable_Unique(E)@u)
+  & not(Ex #u. Reveal(A)@u)
+  & not(Ex #u. Reveal(B)@u)
+  " 
+
 
 lemma secrecy:
   "All A x #i. 
