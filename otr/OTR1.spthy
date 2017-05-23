@@ -13,6 +13,11 @@ begin
 builtins: 
   diffie-hellman, signing
 
+functions: 
+  extract/1
+
+equations:
+  extract(sign{m}k) = m
 
 
 // Public key infrastructure
