@@ -16,7 +16,11 @@ builtins:
   diffie-hellman, signing
 
 functions: 
-  mac/2
+  mac/2 , extract/1
+
+equations:
+  extract(sign{m}k) = m
+
 
 // Public key infrastructure
 
